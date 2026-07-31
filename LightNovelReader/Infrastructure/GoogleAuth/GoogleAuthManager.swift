@@ -42,9 +42,6 @@ public final class GoogleAuthManager: ObservableObject {
     }
 
     private func saveTokens(for user: GIDGoogleUser) async throws {
-        guard let userID = user.userID else {
-            throw AuthError.accountNotAllowed
-        }
         let accessToken = user.accessToken.tokenString
         let refreshToken = user.refreshToken.tokenString
         let expiresIn = max(60, (user.accessToken.expirationDate ?? Date()).timeIntervalSinceNow)
