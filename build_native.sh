@@ -2,10 +2,10 @@
 set -e
 
 echo "=== 1. Selecting Xcode Version ==="
-if [ -d "/Applications/Xcode_16.0.app" ]; then
-  sudo xcode-select -s /Applications/Xcode_16.0.app
-elif [ -d "/Applications/Xcode.app" ]; then
+if [ -d "/Applications/Xcode.app" ]; then
   sudo xcode-select -s /Applications/Xcode.app
+elif [ -d "/Applications/Xcode_16.0.app" ]; then
+  sudo xcode-select -s /Applications/Xcode_16.0.app
 fi
 xcodebuild -version
 
