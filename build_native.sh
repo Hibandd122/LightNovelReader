@@ -25,7 +25,17 @@ xcodebuild build-for-testing \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY=""
 
-echo "=== 4. Building Unsigned Release Archive ==="
+echo "=== 4. Running Unit Tests ==="
+xcodebuild test-without-building \
+  -project "LightNovelReader.xcodeproj" \
+  -scheme "LightNovelReader" \
+  -configuration Debug \
+  -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_IDENTITY=""
+
+echo "=== 5. Building Unsigned Release Archive ==="
 mkdir -p build
 
 xcodebuild archive \
@@ -38,7 +48,7 @@ xcodebuild archive \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY=""
 
-echo "=== 5. Packaging Unsigned IPA File ==="
+echo "=== 6. Packaging Unsigned IPA File ==="
 mkdir -p "build/Payload"
 cp -R "build/LightNovelReader.xcarchive/Products/Applications/LightNovelReader.app" "build/Payload/"
 
