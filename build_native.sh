@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== 1. Generating Xcode Project via XcodeGen ==="
+echo "=== 1. Selecting Xcode Version ==="
+if [ -d "/Applications/Xcode_16.0.app" ]; then
+  sudo xcode-select -s /Applications/Xcode_16.0.app
+elif [ -d "/Applications/Xcode.app" ]; then
+  sudo xcode-select -s /Applications/Xcode.app
+fi
+xcodebuild -version
+
+echo "=== 2. Generating Xcode Project via XcodeGen ==="
 brew install xcodegen || true
 xcodegen generate
 
-echo "=== 2. Building Unsigned Release Archive ==="
+echo "=== 3. Building Unsigned Release Archive ==="
 mkdir -p build
 
 xcodebuild archive \
@@ -17,7 +25,7 @@ xcodebuild archive \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY=""
 
-echo "=== 3. Packaging Unsigned IPA File ==="
+echo "=== 4. Packaging Unsigned IPA File ==="
 mkdir -p "build/Payload"
 cp -R "build/LightNovelReader.xcarchive/Products/Applications/LightNovelReader.app" "build/Payload/"
 
