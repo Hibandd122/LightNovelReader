@@ -12,6 +12,8 @@ public final class GoogleAuthManager: ObservableObject {
     }
 
     public func restorePreviousSignIn() async -> Bool {
+        let clientID = "727455900885-emb3k5dk3eukfs3h9qdtfqljrgn7r7pi.apps.googleusercontent.com"
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
         guard let user = try? await GIDSignIn.sharedInstance.restorePreviousSignIn() else { return false }
         do {
             try await saveTokens(for: user)
@@ -22,11 +24,8 @@ public final class GoogleAuthManager: ObservableObject {
     }
     
     public func signIn() async throws {
-        guard let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String,
-              !clientID.isEmpty,
-              !clientID.contains("mock") else {
-            throw AuthError.configuration
-        }
+        let clientID = "727455900885-emb3k5dk3eukfs3h9qdtfqljrgn7r7pi.apps.googleusercontent.com"
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController else {
             throw NSError(domain: "AuthError", code: -1, userInfo: [NSLocalizedDescriptionKey: "No root view controller found"])

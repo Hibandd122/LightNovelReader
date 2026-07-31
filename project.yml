@@ -30,6 +30,10 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
           UISceneConfigurations: {}
+        GIDClientID: 727455900885-emb3k5dk3eukfs3h9qdtfqljrgn7r7pi.apps.googleusercontent.com
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - com.googleusercontent.apps.727455900885-emb3k5dk3eukfs3h9qdtfqljrgn7r7pi
   LightNovelReaderTests:
     type: bundle.unit-test
     platform: iOS
