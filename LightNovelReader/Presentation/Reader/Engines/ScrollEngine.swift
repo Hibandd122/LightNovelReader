@@ -11,7 +11,7 @@ public enum ScrollDirection {
 }
 
 /// A highly optimized scrolling engine using TextKit 2, Virtualization, and Memory Release for large documents.
-public final class ScrollEngine: NSObject, UIScrollViewDelegate {
+public final class ScrollEngine: NSObject, UITextViewDelegate {
     public weak var delegate: ScrollEngineDelegate?
     private let textView: UITextView
     

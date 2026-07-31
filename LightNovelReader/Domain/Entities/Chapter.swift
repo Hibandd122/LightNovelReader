@@ -11,7 +11,7 @@ public final class Chapter {
     
     public var novel: Novel?
     
-    @Relationship(deleteRule: .cascade, inverse: \Bookmark.chapter)
+    @Relationship(deleteRule: .cascade)
     public var bookmarks: [Bookmark]
     
     public init(id: String, title: String, content: String = "", readingProgress: Float = 0.0, lastReadAt: Date? = nil) {

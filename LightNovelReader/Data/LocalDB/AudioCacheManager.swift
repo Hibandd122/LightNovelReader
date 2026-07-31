@@ -56,15 +56,15 @@ public actor AudioCacheManager {
     }
     
     private func cleanCacheIfNeeded() {
-        guard let files = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey, .modificationDateKey]) else { return }
+        guard let files = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else { return }
         
         var totalSize: Int64 = 0
         var fileStats = [(url: URL, date: Date, size: Int64)]()
         
         for file in files {
             guard let attrs = try? fileManager.attributesOfItem(atPath: file.path),
-                  let size = attrs[.size] as? Int64,
-                  let date = attrs[.modificationDate] as? Date else { continue }
+                  let size = attrs[FileAttributeKey.size] as? Int64,
+                  let date = attrs[FileAttributeKey.modificationDate] as? Date else { continue }
             
             totalSize += size
             fileStats.append((url: file, date: date, size: size))
