@@ -6,13 +6,13 @@ import UIKit
 @MainActor
 public final class GoogleAuthManager: ObservableObject {
     private let tokenManager: TokenManager
-    
+
     public init(tokenManager: TokenManager) {
         self.tokenManager = tokenManager
     }
 
     public func restorePreviousSignIn() async -> Bool {
-        let clientID = "727455900885-emb3k5dk3eukfs3h9qdtfqljrgn7r7pi.apps.googleusercontent.com"
+        guard let clientID = configuredClientID else { return false }
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
         guard let user = try? await GIDSignIn.sharedInstance.restorePreviousSignIn() else { return false }
         do {
@@ -22,23 +22,33 @@ public final class GoogleAuthManager: ObservableObject {
             return false
         }
     }
-    
+
     public func signIn() async throws {
-        let clientID = "727455900885-emb3k5dk3eukfs3h9qdtfqljrgn7r7pi.apps.googleusercontent.com"
+        guard let clientID = configuredClientID else {
+            throw AuthError.configuration
+        }
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController else {
-            throw NSError(domain: "AuthError", code: -1, userInfo: [NSLocalizedDescriptionKey: "No root view controller found"])
+            throw AuthError.missingPresenter
         }
-        
+
         let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
-        
         try await saveTokens(for: result.user)
     }
-    
+
     public func signOut() async {
         GIDSignIn.sharedInstance.signOut()
         await tokenManager.clearTokens()
+    }
+
+    private var configuredClientID: String? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String,
+              !value.isEmpty,
+              !value.contains("$(") else {
+            return nil
+        }
+        return value
     }
 
     private func saveTokens(for user: GIDGoogleUser) async throws {
@@ -50,13 +60,15 @@ public final class GoogleAuthManager: ObservableObject {
 }
 
 private enum AuthError: LocalizedError {
-    case accountNotAllowed
     case configuration
+    case missingPresenter
 
     var errorDescription: String? {
         switch self {
-        case .accountNotAllowed: return "Tài khoản Google này không được phép truy cập."
-        case .configuration: return "Ứng dụng chưa được cấu hình Google OAuth hợp lệ."
+        case .configuration:
+            return "Ứng dụng chưa được cấu hình Google OAuth hợp lệ."
+        case .missingPresenter:
+            return "Không thể mở cửa sổ đăng nhập Google."
         }
     }
 }
