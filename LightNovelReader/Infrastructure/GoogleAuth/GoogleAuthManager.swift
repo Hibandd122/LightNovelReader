@@ -42,9 +42,7 @@ public final class GoogleAuthManager: ObservableObject {
     }
 
     private func saveTokens(for user: GIDGoogleUser) async throws {
-        guard let allowedAccountID = Bundle.main.object(forInfoDictionaryKey: "AllowedGoogleAccountID") as? String,
-              let userID = user.userID,
-              userID == allowedAccountID else {
+        guard let userID = user.userID else {
             throw AuthError.accountNotAllowed
         }
         let accessToken = user.accessToken.tokenString
