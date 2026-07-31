@@ -46,6 +46,10 @@
         self.windowLevel = UIWindowLevelAlert + 500;
         self.backgroundColor = [UIColor clearColor];
         
+        UIViewController *rootVC = [[UIViewController alloc] init];
+        rootVC.view.backgroundColor = [UIColor clearColor];
+        self.rootViewController = rootVC;
+        
         _speechSynthesizer = [[AVSpeechSynthesizer alloc] init];
         _speechSynthesizer.delegate = self;
         _sentences = [NSMutableArray array];
