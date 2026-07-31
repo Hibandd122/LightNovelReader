@@ -1,0 +1,71 @@
+Personal Light Novel Reader (iOS Native)
+
+1. Mục Tiêu (Overview & Goals)
+------------------------------------------------------------------------
+Xây dựng một Networking Layer hoàn toàn bằng Swift nguyên bản (Native Swift Concurrency với `async/await`), không sử dụng thư viện bên thứ ba như Alamofire để giảm kích thước IPA và tăng tính bảo mật. Networking Layer phải hỗ trợ cơ chế Interceptor để tự động gắn Token, tự động thử lại (Retry) khi hết hạn Token (401), và xử lý lỗi tập trung.
+
+2. Kiến Trúc (Architecture)
+------------------------------------------------------------------------
+- `NetworkService` (Protocol): Định nghĩa hàm gọi API duy nhất.
+- `Endpoint` (Protocol): Định nghĩa URL, HTTP Method, Headers, và Body cho từng API cụ thể.
+- `RequestInterceptor` (Protocol): Nơi can thiệp vào request trước khi gửi (gắn Header) và can thiệp vào response sau khi nhận (bắt lỗi 401).
+
+```swift
+public protocol Endpoint {
+    var baseURL: URL { get }
+    var path: String { get }
+    var method: HTTPMethod { get }
+    var headers: [String: String]? { get }
+    var body: Data? { get }
+}
+```
+
+3. Tích hợp Authentication Interceptor
+------------------------------------------------------------------------
+Google OAuth yêu cầu gửi kèm `Authorization: Bearer <Access_Token>`. Token này hết hạn sau 1 giờ.
+Nếu API trả về lỗi 401 (Unauthorized), quy trình xử lý không đồng bộ (Concurrency) như sau:
+1. Yêu cầu (Request A) nhận lỗi 401.
+2. Interceptor tạm ngưng (suspend) Request A và các request tiếp theo bằng cơ chế khóa (Actor/Mutex).
+3. Gọi API Refresh Token bằng `Refresh_Token`.
+4. Nhận Access Token mới, lưu vào Keychain.
+5. Cập nhật lại Header của Request A.
+6. Thử lại (Retry) Request A. Trả kết quả thành công cho UI mà người dùng không hề hay biết đã có lỗi xảy ra.
+
+```swift
+actor TokenManager {
+    private var isRefreshing = false
+    
+    func getValidToken() async throws -> String {
+        // Nếu token hết hạn, đợi hoặc refresh
+        // Trả về token an toàn
+    }
+}
+```
+
+4. Các Endpoints Chính (Google APIs)
+------------------------------------------------------------------------
+- `GoogleDriveEndpoint.listFiles(query: String)`: Lấy danh sách file Google Docs có định dạng cụ thể.
+- `GoogleDocsEndpoint.getDocument(id: String)`: Tải nội dung tài liệu.
+- `GoogleDocsEndpoint.batchUpdate(id: String, requests: [Request])`: Đẩy thay đổi (sửa text, highlight) lên Docs.
+- Mọi endpoint phải cấu trúc JSON Body cực kỳ chuẩn xác theo định dạng API của Google.
+
+5. Xử Lý Lỗi Tập Trung (Centralized Error Handling)
+------------------------------------------------------------------------
+Biến các lỗi HTTP thành Domain Error để UI dễ dàng xử lý và hiển thị Alert.
+- Lỗi kết nối mạng (Internet offline) -> `NetworkError.noConnection`.
+- Lỗi Rate Limit (429) -> `NetworkError.tooManyRequests(retryAfter: Int)`.
+- Lỗi Backend Google (500, 502) -> `NetworkError.serverError`.
+- Decoding Error (JSON parse lỗi) -> Ghi log cảnh báo để Developer sửa, không crash app.
+
+6. Băng Thông và Tối Ưu Mạng (Bandwidth Optimization)
+------------------------------------------------------------------------
+- Sử dụng `URLSessionConfiguration.default` với `waitsForConnectivity = true` (Đợi có mạng mới gửi thay vì ném lỗi ngay).
+- Kích hoạt HTTP/2 Multiplexing có sẵn của URLSession.
+- Nén dữ liệu (GZIP) tự động do URLSession lo liệu.
+- Nếu fetch ảnh bìa (Cover Image), gán `urlRequest.cachePolicy = .returnCacheDataElseLoad`.
+
+7. Tiêu chí Hoàn thành
+------------------------------------------------------------------------
+- [ ] Kiến trúc cho phép khai báo thêm một API mới (ví dụ API Dịch thuật AI) chỉ trong dưới 30 dòng code.
+- [ ] Không rò rỉ bộ nhớ (memory leaks) khi thực hiện đồng thời 50 requests.
+- [ ] Cơ chế tự động Refresh Token 100% không làm mất lệnh Sync của người dùng.

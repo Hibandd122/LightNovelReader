@@ -1,0 +1,64 @@
+Personal Light Novel Reader (iOS Native)
+
+1. Mục Tiêu (Overview)
+------------------------------------------------------------------------
+Tự động hóa hoàn toàn quy trình kiểm tra mã nguồn, chạy test, và đóng gói thành file `.ipa` để triển khai lên thiết bị cá nhân (Sideloading) hoặc TestFlight mà không cần thao tác thủ công phức tạp trên Xcode.
+
+2. Quản Lý Chứng Chỉ (Certificate & Provisioning Profile)
+------------------------------------------------------------------------
+Để cài đặt IPA lên thiết bị thật của bạn, Apple yêu cầu chứng chỉ lập trình viên (Developer Certificate) và file cấp phép (Provisioning Profile).
+- Công cụ: Sử dụng `fastlane match`.
+- `match` sẽ tự động tạo và lưu trữ tất cả các chứng chỉ này vào một Private Git Repository được mã hóa. Mọi máy tính (Mac) clone source code về chỉ cần chạy 1 lệnh là có đủ môi trường để build, không bị lỗi "Certificates Revoked" hay "Missing Private Key" kinh điển của iOS.
+
+3. Cấu Hình Fastlane (Fastfile)
+------------------------------------------------------------------------
+Tạo 2 lane cơ bản trong `Fastfile`:
+- `lane :test`: Chạy `scan` (tự động chạy toàn bộ Unit Test và UI Test trên máy ảo Simulator).
+- `lane :build_ipa`: 
+  + Gọi `match(type: "adhoc")` hoặc `match(type: "development")`.
+  + Gọi `gym(scheme: "LightNovelReader", export_method: "ad-hoc")` để biên dịch mã nguồn thành file `.ipa`.
+
+4. Quy Trình GitHub Actions (CI/CD Pipeline)
+------------------------------------------------------------------------
+Mỗi khi bạn commit và đẩy (Push) code lên nhánh `main`, quy trình (Workflow) sau sẽ được kích hoạt trên một máy ảo macOS của GitHub:
+
+```yaml
+name: iOS CI/CD
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Select Xcode
+      run: sudo xcode-select -s /Applications/Xcode_15.2.app
+    - name: Install Fastlane
+      run: bundle install
+    - name: Run Unit Tests
+      run: bundle exec fastlane test
+    - name: Build IPA
+      env:
+        MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+        GIT_AUTHORIZATION: ${{ secrets.GIT_TOKEN }}
+      run: bundle exec fastlane build_ipa
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: LightNovelReader.ipa
+        path: build/LightNovelReader.ipa
+```
+
+5. Triển Khai (Deployment)
+------------------------------------------------------------------------
+Do đây là ứng dụng phục vụ mục đích cá nhân (Không đưa lên App Store để tránh vi phạm bản quyền nội dung Light Novel):
+- Cách 1 (Khuyên dùng): Xuất file IPA qua CI/CD, tải về máy tính và cài đặt vào iPhone/iPad thông qua ứng dụng Apple Configurator hoặc AltStore (Sideloading).
+- Cách 2: Sử dụng tài khoản Apple Developer trả phí (99$/năm) để đẩy thẳng lên TestFlight thông qua lệnh `fastlane pilot`.
+
+6. Tiêu Chí Hoàn Thành
+------------------------------------------------------------------------
+- [ ] Push code lên nhánh main tự động kích hoạt quá trình Test & Build.
+- [ ] Trả về file `.ipa` sẵn sàng cài đặt trên thiết bị thật sau mỗi lần build thành công.
+- [ ] Quản lý chứng chỉ tập trung, an toàn.

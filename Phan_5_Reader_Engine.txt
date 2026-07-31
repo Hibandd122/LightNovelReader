@@ -1,0 +1,106 @@
+Personal Light Novel Reader (iOS Native)
+
+1. Mục tiêu
+
+Reader Engine là trái tim của ứng dụng. Ưu tiên tốc độ, khả năng đọc tài
+liệu rất dài và trải nghiệm tương tự Apple Books.
+
+2. Trách nhiệm
+
+-   Mở chương.
+-   Hiển thị nội dung.
+-   Ghi nhớ vị trí đọc.
+-   Đồng bộ với TTS.
+-   Đồng bộ với Editor.
+-   Hỗ trợ offline.
+
+3. Kiến trúc
+
+ReaderView ↓ ReaderViewModel ↓ ReaderUseCase ↓ ReaderRepository ↓ Local
+Cache / Google Docs
+
+Business logic chỉ nằm trong UseCase và ViewModel.
+
+4. Chapter Loader
+
+-   Lazy loading.
+-   Chỉ render vùng hiển thị.
+-   Giải phóng dữ liệu không còn dùng.
+-   Hỗ trợ chương rất dài.
+
+5. Rendering
+
+Typography: - Font tùy chỉnh. - Font Size. - Line Height. - Paragraph
+Spacing. - Margin. - Justify.
+
+Theme: - Light - Dark - Sepia
+
+6. Reading Modes
+
+-   Continuous Scroll.
+-   Paged Reading.
+
+Người dùng có thể chuyển đổi mà không mất vị trí đọc.
+
+7. Reading Progress
+
+Lưu: - Chương hiện tại. - Offset. - Phần trăm hoàn thành. - Thời gian
+đọc.
+
+Tự động khôi phục khi mở lại.
+
+8. Bookmark & Highlight
+
+Bookmark: - Theo chương. - Theo đoạn.
+
+Highlight: - Nhiều màu. - Ghi chú. - Chỉnh sửa/Xóa.
+
+9. Search Integration
+
+Điều hướng trực tiếp đến kết quả. Highlight kết quả trong Reader.
+
+10. TTS Integration
+
+Reader phải: - Theo dõi câu đang phát. - Highlight câu. - Auto Scroll. -
+Cho phép chạm để phát từ đoạn bất kỳ.
+
+11. Editor Integration
+
+Nếu nội dung thay đổi: - Cập nhật giao diện. - Không làm mất vị trí
+đọc. - Đồng bộ với TTS.
+
+12. Memory & Performance
+
+-   Không block Main Thread.
+-   Async rendering.
+-   Cache thông minh.
+-   Giảm số lượng View.
+-   Tối ưu cho tài liệu dài.
+
+13. Accessibility
+
+-   Dynamic Type.
+-   VoiceOver.
+-   Large Content Viewer.
+-   Haptic Feedback.
+
+14. Error States
+
+-   Chương không tồn tại.
+-   Lỗi tải.
+-   Offline.
+-   Đồng bộ thất bại.
+
+Hiển thị Retry và giữ dữ liệu cục bộ.
+
+15. Acceptance Criteria
+
+-   Mở chương nhanh.
+-   Cuộn mượt.
+-   Không mất vị trí đọc.
+-   TTS đồng bộ chính xác.
+-   Hoạt động ổn định với chương dài.
+-   Bộ nhớ sử dụng hợp lý.
+
+Đây là đặc tả nền tảng cho Reader Engine. Phần tiếp theo sẽ mô tả Rich
+Text Editor và quy trình chỉnh sửa trong khi AI đang đọc.

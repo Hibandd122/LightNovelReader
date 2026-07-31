@@ -1,0 +1,34 @@
+import Foundation
+
+public final class AzureProvider: TTSProvider {
+    public var providerName: String = "Azure Cognitive Speech"
+    public var currentVoice: TTSVoice
+    public var speakingRate: Float = 1.0
+    
+    private let apiKey: String
+    private let region: String
+    private let networkService: NetworkService
+    
+    public init(apiKey: String, region: String, networkService: NetworkService = URLSessionNetworkService()) {
+        self.apiKey = apiKey
+        self.region = region
+        self.networkService = networkService
+        self.currentVoice = TTSVoice(id: "vi-VN-HoaiMyNeural", name: "Hoai My", language: "vi-VN")
+    }
+    
+    public func synthesize(text: String) async throws -> URL {
+        // Construct Azure SSML request
+        // Download audio and save to URL
+        let dummyURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("azure_dummy.mp3")
+        return dummyURL
+    }
+    
+    public func play(audioURL: URL) async throws {
+        // AVPlayer implementation
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+    }
+    
+    public func pause() {}
+    public func resume() {}
+    public func stop() {}
+}

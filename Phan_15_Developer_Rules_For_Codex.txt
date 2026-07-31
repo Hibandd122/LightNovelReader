@@ -1,0 +1,64 @@
+Personal Light Novel Reader (iOS Native)
+
+Đây là bộ quy tắc lập trình (Developer Rules) bắt buộc phải tuân thủ khi viết mã nguồn cho dự án này. Các AI (Codex, Cursor, Copilot) hoặc lập trình viên khi tham gia dự án phải đọc kỹ file này.
+
+1. Ngôn ngữ & Framework
+------------------------------------------------------------------------
+- **Swift 6**: Bật tính năng `Strict Concurrency Checking = Complete`. Đảm bảo không có warning về Data Race. 
+- **SwiftUI**: Tất cả giao diện phải được viết bằng SwiftUI. Ngoại trừ tính năng hiển thị text siêu dài cần dùng `UIViewRepresentable` bọc `UITextView` (TextKit 2).
+- **SwiftData**: Sử dụng SwiftData thay vì CoreData.
+
+2. Quy tắc Kiến trúc (Clean Architecture)
+------------------------------------------------------------------------
+Mã nguồn phải tuân theo cấu trúc: `Presentation -> Domain <- Data`.
+- **View**: Chỉ chứa UI và Layout. Tuyệt đối không chứa logic xử lý chuỗi, tính toán hay gọi API. Mọi thao tác người dùng phải truyền qua ViewModel.
+- **ViewModel**: Đóng vai trò cầu nối. Nhận input từ View, gọi UseCase. ViewModel phải được đánh dấu `@Observable` (hoặc `ObservableObject` nếu iOS 16) và phải chạy trên `@MainActor`.
+- **UseCase (Domain)**: Chứa toàn bộ Business Logic. Ví dụ: logic kiểm tra xung đột dữ liệu, logic phân mảnh text. UseCase chỉ giao tiếp với Repository thông qua Protocol.
+- **Repository (Data)**: Nơi duy nhất chứa code gọi Database (SwiftData) hoặc Networking (URLSession).
+
+3. Quy tắc Bất đồng bộ (Concurrency)
+------------------------------------------------------------------------
+- Sử dụng `async/await` cho mọi tác vụ bất đồng bộ.
+- Cấm sử dụng `DispatchQueue.main.async` hoặc các API GCD cũ trừ khi phải tương thích ngược (Legacy API).
+- Sử dụng `Task { }` bên trong ViewModel để gọi UseCase.
+- Sử dụng `actor` để bảo vệ các trạng thái dùng chung (Shared mutable state) như `TokenManager` hay `AudioCacheManager`.
+
+4. Quy tắc Dependency Injection (DI)
+------------------------------------------------------------------------
+- Không sử dụng Singleton lạm dụng (ví dụ: `DatabaseManager.shared.fetch()`).
+- Mọi dependency phải được tiêm (Inject) qua hàm khởi tạo (Initializer).
+```swift
+class ReaderViewModel {
+    private let getChapterUseCase: GetChapterUseCaseProtocol
+    
+    init(useCase: GetChapterUseCaseProtocol) {
+        self.getChapterUseCase = useCase
+    }
+}
+```
+
+5. Quy tắc Code Style & Clean Code
+------------------------------------------------------------------------
+- **Không dùng Force Unwrapping (`!`)**: Trừ các Outlet (không có trong SwiftUI) hoặc những trường hợp chắc chắn 100% về mặt logic lúc khởi tạo ứng dụng (như URL tĩnh). Sử dụng `guard let` hoặc `if let`.
+- **Chia nhỏ View**: Một file `.swift` không nên dài quá 300 dòng. Nếu View quá lớn, tách thành các component nhỏ (`struct HeaderView`, `struct ContentBodyView`).
+- **Đặt tên chuẩn Apple**:
+  + Biến/Hàm: `camelCase` (vd: `fetchDocument`)
+  + Class/Struct/Protocol: `PascalCase` (vd: `ReaderViewModel`)
+  + Hằng số (Constants): Không dùng `ALL_CAPS`, dùng `camelCase` hoặc PascalCase gom trong `enum Constants`.
+
+6. Quy tắc Xử lý lỗi (Error Handling)
+------------------------------------------------------------------------
+- Định nghĩa các kiểu lỗi rõ ràng bằng `enum` kế thừa `Error` và `LocalizedError`.
+- Không nuốt lỗi (Swallow errors): 
+```swift
+// SAI
+catch { print("Error") }
+
+// ĐÚNG
+catch {
+    Logger.network.error("Failed to fetch doc: \(error.localizedDescription)")
+    self.viewState = .error(error)
+}
+```
+
+Hãy tuân thủ nghiêm ngặt 6 quy tắc này trong mọi file code được sinh ra.

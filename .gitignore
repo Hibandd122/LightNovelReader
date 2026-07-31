@@ -1,0 +1,11 @@
+node_modules/
+.eas/
+certificate.zip
+certificate/
+certificate*
+credentials.json
+cert.p12
+cert.mobileprovision
+password.txt
+build/
+*.xcodeproj

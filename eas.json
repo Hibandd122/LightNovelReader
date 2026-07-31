@@ -1,0 +1,9 @@
+{
+  "build": {
+    "internal": {
+      "distribution": "internal",
+      "credentialsSource": "local",
+      "config": "build.yml"
+    }
+  }
+}

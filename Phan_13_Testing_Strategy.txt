@@ -1,0 +1,44 @@
+Personal Light Novel Reader (iOS Native)
+
+1. Mục Tiêu (Overview)
+------------------------------------------------------------------------
+Để đảm bảo ứng dụng cá nhân nhưng có chất lượng "Production-Ready", đặc biệt khi xử lý dữ liệu từ Google Docs (dễ xảy ra lỗi mất chữ, mất dữ liệu), một chiến lược kiểm thử (Testing Strategy) vững chắc là bắt buộc. Nhờ việc áp dụng Clean Architecture, các module được tách bạch hoàn toàn, giúp việc viết test trở nên dễ dàng và cô lập (Isolated).
+
+2. Unit Testing (Kiểm thử Mức Đơn vị) - XCTest
+------------------------------------------------------------------------
+Trọng tâm Unit Test phải đặt vào tầng **Domain** (UseCases) và **Data** (Repositories/Services).
+- **Test UseCases**: 
+  Kiểm tra logic nghiệp vụ. Ví dụ: `OfflineSyncUseCase` phải đưa ra quyết định đúng khi nhận được 2 version (Local và Cloud) khác nhau.
+- **Test Thuật Toán Text Segmentation**:
+  Thuật toán chia đoạn văn thành các câu cho TTS phải được test với nhiều ngôn ngữ: Tiếng Việt (chứa dấu phẩy, chấm), Tiếng Anh (dấu phẩy trên, quotes), Tiếng Nhật (các loại ngoặc 「」, dấu 。).
+  ```swift
+  func testTextSegmenter_WithJapaneseQuotes_ShouldNotBreakInsideQuote() {
+      let text = "Cậu ấy nói: 「Xin chào, tôi là AI.」 và rời đi."
+      let sentences = segmenter.split(text)
+      XCTAssertEqual(sentences.count, 2)
+      // Câu 1: Cậu ấy nói: 「Xin chào, tôi là AI.」
+      // Câu 2: và rời đi.
+  }
+  ```
+
+3. Chiến Lược Giả Lập (Mocking Strategy)
+------------------------------------------------------------------------
+- Tuân thủ Protocol-Oriented Programming (POP), ta tự viết các class Mock mà không cần thư viện bên thứ 3 (như Cuckoo hay SwiftyMocky) để giảm độ phức tạp.
+- Ví dụ: `MockTTSProvider` sẽ không gọi API thật mà chỉ trả về một file mp3 dummy trên máy sau 1 khoảng thời gian Delay, nhằm test luồng UI.
+- `MockNetworkService`: Trả về JSON giả định (Fixture) cho Google Docs để test cơ chế phân tích (Parsing/Decoding) thành công hay báo lỗi.
+
+4. UI Testing (Kiểm thử Giao Diện) - XCUITest
+------------------------------------------------------------------------
+- Dành cho các luồng quan trọng nhất (Critical Paths).
+- **Luồng Đọc (Reader Flow)**: Mở ứng dụng -> Chọn truyện -> Cuộn trang -> Nhấn nút Play TTS -> Kiểm tra xem element `TTSControlPanel` có xuất hiện hay không.
+- **Luồng Chỉnh Sửa (Editor Flow)**: Bôi đen một đoạn text -> Hiện menu Highlight -> Kiểm tra màu văn bản thay đổi.
+
+5. Tích Hợp Snapshot Testing (Tùy Chọn)
+------------------------------------------------------------------------
+Với giao diện Reader rất nhạy cảm với sự thay đổi của Font chữ hay Khoảng cách dòng (Line Height), sử dụng `PointFree/swift-snapshot-testing` để chụp ảnh màn hình của Render View và so sánh với phiên bản chuẩn (Reference Image). Nếu UI bị lệch 1 pixel, test sẽ fail, giúp lập trình viên phát hiện sớm lỗi vỡ layout.
+
+6. Tiêu Chí Hoàn Thành
+------------------------------------------------------------------------
+- [ ] Code Coverage tầng Domain (Business Logic) đạt >= 85%.
+- [ ] Mọi thuật toán liên quan đến Text Diffing (Conflict Resolution) và Text Segmentation đều phải có Unit Test.
+- [ ] XCUITest chạy thành công luồng cơ bản (Happy Path) trên 2 kích thước màn hình: iPhone 15 (Portrait) và iPad Pro (Landscape).

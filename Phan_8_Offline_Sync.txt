@@ -1,0 +1,74 @@
+Personal Light Novel Reader (iOS Native)
+
+1. Mục Tiêu (Overview & Goals)
+------------------------------------------------------------------------
+Module Offline Sync & Conflict Resolution đảm bảo ứng dụng có thể hoạt động hoàn hảo khi không có kết nối mạng (trên máy bay, vùng sâu vùng xa). Mọi thay đổi về nội dung truyện, đánh dấu trang (bookmark), và tiến trình đọc (reading progress) phải được lưu trữ an toàn cục bộ và tự động đồng bộ hóa với Google Docs / Google Drive ngay khi có mạng trở lại, đồng thời giải quyết các xung đột dữ liệu một cách thông minh.
+
+2. Kiến Trúc Đồng Bộ (Sync Architecture)
+------------------------------------------------------------------------
+- Core Nguyên lý: "Local Database is the Single Source of Truth for UI". (Cơ sở dữ liệu cục bộ là nguồn sự thật duy nhất cho giao diện). Giao diện không bao giờ chờ mạng để render. Mọi tương tác của người dùng đều update Local DB ngay lập tức (Optimistic UI).
+- `SyncManager`: Quản lý trạng thái mạng (`NWPathMonitor`) và lắng nghe sự thay đổi từ Local DB.
+- `SyncQueue` (Hàng đợi đồng bộ): Lưu trữ các tác vụ (Sync Jobs) cần đẩy lên Cloud.
+- `GoogleDocsSyncEngine`: Lớp giao tiếp trực tiếp với Google APIs để lấy dữ liệu mới (Pull) hoặc đẩy dữ liệu lên (Push).
+
+3. Data Models cho Đồng Bộ
+------------------------------------------------------------------------
+Để hỗ trợ đồng bộ, Local DB cần lưu trữ thêm các metadata:
+```swift
+struct SyncJob: Identifiable, Codable {
+    let id: UUID
+    let documentId: String
+    let operationType: OperationType // .updateProgress, .editContent, .addBookmark
+    let payload: Data // JSON chứa nội dung thay đổi
+    var status: JobStatus // .pending, .inProgress, .failed
+    var retryCount: Int
+    let createdAt: Date
+}
+
+struct DocumentMetadata {
+    var documentId: String
+    var currentRevisionId: String // Phiên bản (revision) hiện tại mà thiết bị đang lưu
+    var lastSyncedAt: Date
+}
+```
+
+4. Thuật toán Giải Quyết Xung Đột (Conflict Resolution)
+------------------------------------------------------------------------
+Xung đột xảy ra khi: Bạn đọc/sửa truyện trên iPad (offline), cùng lúc đó lại sửa truyện trên Web Google Docs ở máy tính. Khi iPad có mạng, xung đột phiên bản sẽ xảy ra.
+
+Thuật toán xử lý (Dựa trên Revision Tracking):
+1. **Pull Before Push**: Trước khi đẩy (Push) thay đổi của thiết bị lên, `SyncEngine` gọi API lấy `revisionId` mới nhất của Google Docs.
+2. **Kiểm tra Xung Đột**: So sánh `local_revisionId` (version đang lưu ở máy) với `remote_revisionId` (version trên Cloud).
+   - *Case 1*: `local_revisionId == remote_revisionId` -> KHÔNG XUNG ĐỘT. Đẩy (Push) an toàn.
+   - *Case 2*: `local_revisionId < remote_revisionId` -> XUNG ĐỘT. Tài liệu trên Cloud đã bị thay đổi bởi thiết bị/người khác.
+3. **Chiến lược Merge (Gộp)**:
+   - *Tiến trình đọc (Reading Progress)*: Áp dụng LWW (Last-Write-Wins) theo Timestamp. Thiết bị nào có Timestamp cập nhật tiến trình đọc gần nhất sẽ ghi đè thiết bị kia.
+   - *Nội dung văn bản (Content)*: Khó nhất. Do Google Docs sử dụng Operational Transformation (OT), nếu gửi sai revision, API sẽ từ chối. Giải pháp:
+     a) Cố gắng gửi thay đổi thông qua `batchUpdate` API. Nếu Google Docs báo lỗi `400 Bad Request` (Invalid Revision), ta xử lý thủ công.
+     b) Fallback: Tải phiên bản mới nhất từ Cloud về, chạy thuật toán Text Diff (Myers Diff Algorithm) với phiên bản Local.
+     c) Nếu Diff quá phức tạp và có chồng chéo sửa đổi (Overlapping edits): Kích hoạt giao diện UI "Conflict Resolution". Hiển thị 2 cột: Phiên bản Thiết Bị vs Phiên bản Đám Mây. Người dùng sẽ là người quyết định chọn phiên bản nào, hoặc gộp bằng tay.
+
+5. Hàng Đợi và Cơ Chế Thử Lại (Queue & Retry Mechanism)
+------------------------------------------------------------------------
+- Mọi tác vụ Sync bị lỗi mạng đều được đưa vào hàng đợi `PendingSyncJob` trong CoreData/SwiftData.
+- Cơ chế **Exponential Backoff**: Khi thất bại do lỗi mạng hoặc Rate Limit (HTTP 429), thời gian thử lại của Job sẽ tăng dần theo cấp số nhân: 2s -> 4s -> 8s -> 16s -> 1 phút -> Tối đa 1 giờ, nhằm tránh làm kiệt quệ tài nguyên máy và giảm tải cho Google API.
+
+6. Đồng Bộ Nền (Background Sync)
+------------------------------------------------------------------------
+iOS hạn chế tiến trình chạy ngầm. Để đồng bộ tự động ngay cả khi app bị tắt:
+- Đăng ký `BGAppRefreshTaskRequest` với định danh `com.app.lightnovel.sync`.
+- Khi iOS đánh thức ứng dụng (thường là khi người dùng đang sạc pin và có Wifi), `SyncManager` lập tức xử lý `SyncQueue`. Thời gian thực thi tối đa được hệ thống cho phép là khoảng 30 giây.
+
+7. Bắt Lỗi và Xử Lý Ngoại Lệ
+------------------------------------------------------------------------
+- **Lỗi HTTP 401 (Unauthorized)**: Access Token hết hạn. Job tạm ngưng -> Kích hoạt `TokenManager` refresh token bằng Refresh Token -> Gọi lại Sync.
+- **Lỗi HTTP 403 (Forbidden)**: Hết dung lượng Google Drive hoặc bị thu hồi quyền truy cập. Đánh dấu lỗi đỏ trên UI để người dùng biết.
+- **Payload Quá Lớn**: Một số chương truyện cực dài khiến request timeout. Giải pháp: Chia nhỏ (Chunking) các lệnh `batchUpdate` hoặc sử dụng Multipart Upload nếu cập nhật tệp tin.
+
+8. Tiêu Chí Hoàn Thành (Acceptance Criteria)
+------------------------------------------------------------------------
+- [ ] Khi bật chế độ Máy Bay, mọi chỉnh sửa đều được lưu cục bộ, UI không bị treo (frozen).
+- [ ] Tắt chế độ Máy Bay, trong vòng 3-5 giây ứng dụng tự động đồng bộ và đẩy dữ liệu lên Google Docs thành công.
+- [ ] Nhận diện chính xác xung đột dữ liệu từ 2 thiết bị khác nhau và hiển thị thông báo Conflict.
+- [ ] Background sync hoạt động ổn định khi app bị đóng băng (suspended).
+- [ ] Không làm cạn kiệt pin hoặc CPU nếu mạng chập chờn liên tục.
