@@ -15,7 +15,17 @@ if ! command -v xcodegen >/dev/null 2>&1; then
 fi
 xcodegen generate
 
-echo "=== 3. Building Unsigned Release Archive ==="
+echo "=== 3. Compiling Unit Tests ==="
+xcodebuild build-for-testing \
+  -project "LightNovelReader.xcodeproj" \
+  -scheme "LightNovelReader" \
+  -configuration Debug \
+  -destination "generic/platform=iOS Simulator" \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_IDENTITY=""
+
+echo "=== 4. Building Unsigned Release Archive ==="
 mkdir -p build
 
 xcodebuild archive \
@@ -28,7 +38,7 @@ xcodebuild archive \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY=""
 
-echo "=== 4. Packaging Unsigned IPA File ==="
+echo "=== 5. Packaging Unsigned IPA File ==="
 mkdir -p "build/Payload"
 cp -R "build/LightNovelReader.xcarchive/Products/Applications/LightNovelReader.app" "build/Payload/"
 
