@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 public final class OpenAIProvider: TTSProvider {
     public var providerName: String = "OpenAI TTS"
     public var currentVoice: TTSVoice
@@ -15,16 +16,11 @@ public final class OpenAIProvider: TTSProvider {
     }
     
     public func synthesize(text: String) async throws -> URL {
-        // Construct OpenAI API request
-        // https://api.openai.com/v1/audio/speech
-        // Download audio and save to URL
-        let dummyURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("openai_dummy.mp3")
-        return dummyURL
+        throw TTSProviderError.unavailable(providerName)
     }
     
     public func play(audioURL: URL) async throws {
-        // AVPlayer implementation to play the file
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        throw TTSProviderError.unavailable(providerName)
     }
     
     public func pause() {}

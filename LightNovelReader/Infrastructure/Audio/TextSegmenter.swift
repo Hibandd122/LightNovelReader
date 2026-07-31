@@ -1,37 +1,52 @@
 import Foundation
 
 public struct TextSegmenter {
+    private let sentenceTerminators: Set<Unicode.Scalar> = [".", "!", "?", "。", "！", "？", "…"]
+    private let hardTerminators: Set<Unicode.Scalar> = ["。", "！", "？"]
+    private let closingQuotes: Set<Unicode.Scalar> = ["\"", "'", "”", "’", "」", "』", "》", "〉", "】", ")", "]", "}"]
+
     public init() {}
-    
-    /// Splits a large text into sentences for TTS processing
-    /// Respects Japanese and English quote marks and standard punctuation.
+
     public func split(_ text: String) -> [String] {
-        // A robust implementation would use NaturalLanguage framework (NLTokenizer)
-        // or complex Regex. For brevity, a simple split is demonstrated here.
-        var result = [String]()
-        
-        let pattern = "(?<=[。！？.!?])\\s+(?=[^「”\"])"
-        let regex = try? NSRegularExpression(pattern: pattern, options: [])
-        
-        let range = NSRange(text.startIndex..., in: text)
-        var lastEndIndex = text.startIndex
-        
-        regex?.enumerateMatches(in: text, options: [], range: range) { match, _, _ in
-            guard let match = match else { return }
-            let matchRange = Range(match.range, in: text)!
-            let sentence = String(text[lastEndIndex..<matchRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !sentence.isEmpty {
-                result.append(sentence)
+        let scalars = Array(text.unicodeScalars)
+        guard !scalars.isEmpty else { return [] }
+
+        var result: [String] = []
+        var start = 0
+        var index = 0
+
+        while index < scalars.count {
+            let scalar = scalars[index]
+            let isParagraphBreak = scalar == "\n" && index + 1 < scalars.count && scalars[index + 1] == "\n"
+            let isTerminator = sentenceTerminators.contains(scalar)
+            guard isTerminator || isParagraphBreak else {
+                index += 1
+                continue
             }
-            lastEndIndex = matchRange.upperBound
+
+            var end = isParagraphBreak ? index : index + 1
+            while end < scalars.count && closingQuotes.contains(scalars[end]) { end += 1 }
+            if isTerminator {
+                while end < scalars.count && sentenceTerminators.contains(scalars[end]) { end += 1 }
+            }
+
+            let next = end < scalars.count ? scalars[end] : nil
+            let canBreak = next == nil || next?.properties.isWhitespace == true || isParagraphBreak || hardTerminators.contains(scalar)
+            if canBreak {
+                append(String(scalars[start..<end].map { String($0) }.joined()), to: &result)
+                start = end
+            }
+            index = max(end, index + 1)
         }
-        
-        let lastSentence = String(text[lastEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
-        if !lastSentence.isEmpty {
-            result.append(lastSentence)
+
+        if start < scalars.count {
+            append(String(scalars[start...].map { String($0) }.joined()), to: &result)
         }
-        
-        // Fallback if no punctuation is found
-        return result.isEmpty ? [text] : result
+        return result
+    }
+
+    private func append(_ value: String, to result: inout [String]) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { result.append(trimmed) }
     }
 }

@@ -13,12 +13,14 @@ public struct EditorView: View {
             if viewModel.isLoading {
                 ProgressView("Loading Editor...")
             } else {
-                TextEditor(text: $viewModel.text)
-                    .padding()
-                    .font(.body)
-                    .onChange(of: viewModel.text) { _ in
-                        viewModel.documentDidChange()
-                    }
+                RichTextEditor(
+                    attributedText: $viewModel.attributedText,
+                    selectedRange: $viewModel.selectedRange
+                )
+                .padding()
+                .onChange(of: viewModel.attributedText.string) { _ in
+                    viewModel.documentDidChange()
+                }
             }
         }
         .navigationTitle("Editor")

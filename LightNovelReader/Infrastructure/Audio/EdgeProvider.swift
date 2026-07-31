@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 public final class EdgeProvider: TTSProvider {
     public var providerName: String = "Microsoft Edge TTS"
     public var currentVoice: TTSVoice
@@ -13,14 +14,11 @@ public final class EdgeProvider: TTSProvider {
     }
     
     public func synthesize(text: String) async throws -> URL {
-        // Reverse engineered Edge TTS websocket or HTTP endpoints
-        let dummyURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("edge_dummy.mp3")
-        return dummyURL
+        throw TTSProviderError.unavailable(providerName)
     }
     
     public func play(audioURL: URL) async throws {
-        // AVPlayer implementation
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        throw TTSProviderError.unavailable(providerName)
     }
     
     public func pause() {}

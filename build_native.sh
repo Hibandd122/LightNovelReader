@@ -10,7 +10,9 @@ fi
 xcodebuild -version
 
 echo "=== 2. Generating Xcode Project via XcodeGen ==="
-brew install xcodegen || true
+if ! command -v xcodegen >/dev/null 2>&1; then
+  brew install xcodegen
+fi
 xcodegen generate
 
 echo "=== 3. Building Unsigned Release Archive ==="

@@ -3,9 +3,11 @@ import UIKit
 
 public struct RichTextEditor: UIViewRepresentable {
     @Binding var attributedText: NSAttributedString
+    @Binding var selectedRange: NSRange
     
-    public init(attributedText: Binding<NSAttributedString>) {
+    public init(attributedText: Binding<NSAttributedString>, selectedRange: Binding<NSRange> = .constant(NSRange(location: 0, length: 0))) {
         self._attributedText = attributedText
+        self._selectedRange = selectedRange
     }
     
     public func makeUIView(context: Context) -> UITextView {
@@ -22,8 +24,11 @@ public struct RichTextEditor: UIViewRepresentable {
     }
     
     public func updateUIView(_ uiView: UITextView, context: Context) {
-        if uiView.attributedText != attributedText {
+        if !uiView.attributedText.isEqual(to: attributedText) {
             uiView.attributedText = attributedText
+        }
+        if uiView.selectedRange != selectedRange {
+            uiView.selectedRange = selectedRange
         }
     }
     
@@ -40,6 +45,10 @@ public struct RichTextEditor: UIViewRepresentable {
         
         public func textViewDidChange(_ textView: UITextView) {
             parent.attributedText = textView.attributedText
+        }
+
+        public func textViewDidChangeSelection(_ textView: UITextView) {
+            parent.selectedRange = textView.selectedRange
         }
     }
 }

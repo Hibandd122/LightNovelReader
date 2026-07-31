@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 public final class AzureProvider: TTSProvider {
     public var providerName: String = "Azure Cognitive Speech"
     public var currentVoice: TTSVoice
@@ -17,15 +18,11 @@ public final class AzureProvider: TTSProvider {
     }
     
     public func synthesize(text: String) async throws -> URL {
-        // Construct Azure SSML request
-        // Download audio and save to URL
-        let dummyURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("azure_dummy.mp3")
-        return dummyURL
+        throw TTSProviderError.unavailable(providerName)
     }
     
     public func play(audioURL: URL) async throws {
-        // AVPlayer implementation
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        throw TTSProviderError.unavailable(providerName)
     }
     
     public func pause() {}

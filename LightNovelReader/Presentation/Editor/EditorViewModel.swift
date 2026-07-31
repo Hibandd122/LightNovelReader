@@ -1,45 +1,65 @@
 import Foundation
 import Combine
+import UIKit
 
 @MainActor
 public final class EditorViewModel: ObservableObject {
-    @Published public var text: String = ""
-    @Published public var isLoading: Bool = false
-    @Published public var isSaving: Bool = false
-    @Published public var saveStatusMessage: String = "Saved"
-    
+    @Published public var text = ""
+    @Published public var attributedText = NSAttributedString()
+    @Published public var selectedRange = NSRange(location: 0, length: 0)
+    @Published public var isLoading = false
+    @Published public var isSaving = false
+    @Published public var saveStatusMessage = "Đã lưu"
+
     private var saveTask: Task<Void, Never>?
-    
+    private weak var chapter: Chapter?
+
     public init() {}
-    
+
     public func loadDocument(for novel: Novel) {
-        isLoading = true
-        Task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            self.text = "Chapter 1: The Beginning\n\nAs the sun rose over the digital horizon, the AI began its long awaited compilation."
-            self.isLoading = false
-        }
+        chapter = novel.chapters.first
+        text = chapter?.content ?? ""
+        attributedText = NSAttributedString(string: text, attributes: [.font: UIFont.preferredFont(forTextStyle: .body)])
+        selectedRange = NSRange(location: 0, length: 0)
+        isLoading = false
     }
-    
+
     public func documentDidChange() {
-        saveStatusMessage = "Unsaved changes"
+        text = attributedText.string
+        saveStatusMessage = "Chưa lưu"
         saveTask?.cancel()
-        
-        // Debounce 2 seconds before auto-saving
-        saveTask = Task {
+        saveTask = Task { [weak self] in
             do {
-                try await Task.sleep(nanoseconds: 2_000_000_000)
-                guard !Task.isCancelled else { return }
-                
+                try await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let self, let chapter = self.chapter else { return }
                 self.isSaving = true
-                // Perform actual local DB save here
-                // SyncJob creation for offline sync happens here
-                
-                try await Task.sleep(nanoseconds: 500_000_000) // Mock save time
+                chapter.content = self.text
+                chapter.novel?.lastModified = Date()
+                if let context = chapter.modelContext {
+                    let documentID = chapter.novel?.id ?? ""
+                    let payload = try JSONEncoder().encode(self.text)
+                    let descriptor = FetchDescriptor<SyncJob>(predicate: #Predicate {
+                        $0.documentId == documentID && $0.operationType == 0 && $0.status != 1
+                    })
+                    if let pendingJob = try context.fetch(descriptor).first {
+                        pendingJob.payload = payload
+                        pendingJob.retryCount = 0
+                        pendingJob.status = 0
+                        pendingJob.nextAttemptAt = nil
+                    } else {
+                        context.insert(SyncJob(documentId: documentID, operationType: 0, payload: payload))
+                    }
+                    chapter.novel?.syncStatus = 1
+                    try context.save()
+                    DIContainer.shared.syncManager.configure(context: context)
+                    DIContainer.shared.syncManager.triggerSync()
+                }
                 self.isSaving = false
-                self.saveStatusMessage = "Saved"
+                self.saveStatusMessage = "Đã lưu"
             } catch {
-                // Task cancelled
+                guard !Task.isCancelled else { return }
+                self?.isSaving = false
+                self?.saveStatusMessage = "Lưu thất bại"
             }
         }
     }

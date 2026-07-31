@@ -7,6 +7,7 @@ public enum TTSProviderType {
     case edge
 }
 
+@MainActor
 public struct TTSFactory {
     public static func createProvider(type: TTSProviderType) -> TTSProvider {
         switch type {

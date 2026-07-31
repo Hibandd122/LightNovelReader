@@ -43,18 +43,18 @@ public final class PaginationEngine {
     }
     
     private func enablePageMode() {
-        // Hide standard text view
-        textView.removeFromSuperview()
-        
-        // Setup UIPageViewController
-        pageViewController = UIPageViewController(transitionStyle: .pageCurl, navigationOrientation: .horizontal, options: nil)
-        
-        if let pageVC = pageViewController, let container = containerView {
-            container.addSubview(pageVC.view)
-            pageVC.view.frame = container.bounds
-            pageVC.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            
-            // In a real app, feed view controllers with chunked attributed text here
-        }
+        // Keep the same TextKit-backed view and let UIKit snap by viewport.
+        // The previous implementation removed the text view and created an
+        // empty UIPageViewController, which made page mode appear blank.
+        pageViewController?.view.removeFromSuperview()
+        pageViewController?.removeFromParent()
+        pageViewController = nil
+
+        guard let container = containerView else { return }
+        textView.isScrollEnabled = true
+        textView.isPagingEnabled = true
+        container.addSubview(textView)
+        textView.frame = container.bounds
+        textView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     }
 }

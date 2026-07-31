@@ -1,40 +1,37 @@
 import XCTest
+import SwiftData
 @testable import LightNovelReader
 
+@MainActor
 final class OfflineSyncUseCaseTests: XCTestCase {
-    
-    var useCase: SyncOfflineDataUseCaseProtocol!
-    
+    private var useCase: SyncOfflineDataUseCase?
+
     override func setUp() {
         super.setUp()
-        // Mocking SyncManager
-        let mockNetwork = MockNetworkService()
-        let syncManager = SyncManager(networkService: mockNetwork)
+        let syncManager = SyncManager(repository: StubGoogleDocsRepository())
         useCase = SyncOfflineDataUseCase(syncManager: syncManager)
     }
-    
+
     override func tearDown() {
         useCase = nil
         super.tearDown()
     }
-    
-    func testConflictResolution_WhenRevisionsMatch_ShouldReturnTrue() async {
+
+    func testConflictResolutionWhenRevisionsMatch() async {
+        guard let useCase else { return XCTFail("Use case was not initialized") }
         let result = await useCase.resolveConflict(localRevision: "v123", remoteRevision: "v123")
         XCTAssertTrue(result)
     }
-    
-    func testConflictResolution_WhenRemoteIsNewer_ShouldReturnFalse() async {
+
+    func testConflictResolutionWhenRemoteIsNewer() async {
+        guard let useCase else { return XCTFail("Use case was not initialized") }
         let result = await useCase.resolveConflict(localRevision: "v123", remoteRevision: "v124")
         XCTAssertFalse(result)
     }
 }
 
-class MockNetworkService: NetworkService {
-    func request<T>(endpoint: Endpoint) async throws -> T where T : Decodable {
-        fatalError("Mock not implemented")
-    }
-    
-    func requestRaw(endpoint: Endpoint) async throws -> Data {
-        return Data()
-    }
+@MainActor
+private struct StubGoogleDocsRepository: GoogleDocsRepositoryProtocol {
+    func fetchAndSaveDocument(id: String, context: ModelContext) async throws {}
+    func pushLocalChanges(for novel: Novel, context: ModelContext) async throws {}
 }

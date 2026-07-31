@@ -19,6 +19,7 @@ public struct TTSControlPanel: View {
                     Image(systemName: "backward.fill")
                         .font(.title2)
                 }
+                .accessibilityLabel("Câu trước")
                 
                 Button(action: {
                     if viewModel.isPlaying {
@@ -30,6 +31,7 @@ public struct TTSControlPanel: View {
                     Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: 50))
                 }
+                .accessibilityLabel(viewModel.isPlaying ? "Tạm dừng đọc" : "Đọc tiếp")
                 
                 Button(action: {
                     viewModel.nextSentence()
@@ -37,6 +39,16 @@ public struct TTSControlPanel: View {
                     Image(systemName: "forward.fill")
                         .font(.title2)
                 }
+                .accessibilityLabel("Câu tiếp theo")
+            }
+
+            Menu {
+                Button("Chậm") { viewModel.setSpeakingRate(0.35) }
+                Button("Bình thường") { viewModel.setSpeakingRate(0.5) }
+                Button("Nhanh") { viewModel.setSpeakingRate(0.65) }
+            } label: {
+                Label("Tốc độ và giọng: Tiếng Việt", systemImage: "slider.horizontal.3")
+                    .font(.caption)
             }
         }
         .padding()
@@ -46,5 +58,13 @@ public struct TTSControlPanel: View {
                 .shadow(radius: 10)
         )
         .padding()
+        .alert("Không thể đọc to", isPresented: Binding(
+            get: { viewModel.ttsError != nil },
+            set: { if !$0 { viewModel.ttsError = nil } }
+        )) {
+            Button("Đóng", role: .cancel) {}
+        } message: {
+            Text(viewModel.ttsError ?? "Đã xảy ra lỗi đọc to.")
+        }
     }
 }

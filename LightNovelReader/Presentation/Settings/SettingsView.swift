@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct SettingsView: View {
     @EnvironmentObject var appState: AppState
+    @AppStorage("appTheme") private var appTheme = AppThemeType.system.rawValue
     
     public init() {}
     
@@ -24,11 +25,9 @@ public struct SettingsView: View {
                             Task {
                                 do {
                                     try await DIContainer.shared.googleAuthManager.signIn()
-                                    await MainActor.run {
-                                        appState.isAuthenticated = true
-                                    }
+                                    appState.isAuthenticated = true
                                 } catch {
-                                    print("Login failed: \(error)")
+                                    appState.authenticationError = error.localizedDescription
                                 }
                             }
                         }
@@ -36,17 +35,37 @@ public struct SettingsView: View {
                 }
                 
                 Section(header: Text("TTS Engine")) {
-                    Text("Apple AVSpeech (Default)")
-                    Text("OpenAI TTS (Requires API Key)")
+                    Text("Apple AVSpeech — Tiếng Việt (vi-VN)")
+                    Text("Giọng đọc phụ thuộc voice tiếng Việt đã cài trên iPhone/iPad.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section(header: Text("Giao diện")) {
+                    Picker("Chủ đề", selection: $appTheme) {
+                        ForEach(AppThemeType.allCases) { theme in
+                            Text(theme.rawValue).tag(theme.rawValue)
+                        }
+                    }
                 }
                 
                 Section(header: Text("Data")) {
                     Button("Clear Cache") {
-                        // Call AudioCacheManager to clean
+                        Task {
+                            await DIContainer.shared.audioCacheManager.clearAll()
+                        }
                     }
                 }
             }
             .navigationTitle("Settings")
+            .alert("Đăng nhập thất bại", isPresented: Binding(
+                get: { appState.authenticationError != nil },
+                set: { if !$0 { appState.authenticationError = nil } }
+            )) {
+                Button("Đóng", role: .cancel) {}
+            } message: {
+                Text(appState.authenticationError ?? "Không thể đăng nhập Google.")
+            }
         }
     }
 }

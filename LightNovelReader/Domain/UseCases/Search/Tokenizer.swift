@@ -12,6 +12,6 @@ public struct Tokenizer {
         
         let words = folded.components(separatedBy: CharacterSet.alphanumerics.inverted)
         
-        return words.filter { $0.count > 2 } // Ignore stop words / very short words
+        return words.filter { $0.count > 1 }
     }
 }

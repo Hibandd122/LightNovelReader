@@ -12,7 +12,7 @@ public enum AppThemeType: String, CaseIterable, Identifiable {
     public var id: String { self.rawValue }
 }
 
-public struct ThemeConfig: Equatable {
+public struct ThemeConfig {
     public var backgroundColor: UIColor
     public var textColor: UIColor
     public var accentColor: UIColor

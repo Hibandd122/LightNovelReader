@@ -1,15 +1,17 @@
 import Foundation
+import Combine
 import SwiftData
 
 @MainActor
 public final class LibraryViewModel: ObservableObject {
     @Published public var isSyncing: Bool = false
     @Published public var error: String?
-    
-    // In real app, inject this
-    // private let getNovelsUseCase: GetNovelsUseCase
-    
-    public init() {}
+
+    private let repository: GoogleDocsRepositoryProtocol
+
+    public init(repository: GoogleDocsRepositoryProtocol = DIContainer.shared.googleDocsRepository) {
+        self.repository = repository
+    }
     
     public func syncFromGoogleDocs(context: ModelContext) async {
         guard !isSyncing else { return }
@@ -17,15 +19,8 @@ public final class LibraryViewModel: ObservableObject {
         defer { isSyncing = false }
         
         do {
-            // Mocking a network call
-            try await Task.sleep(nanoseconds: 1_500_000_000)
-            
-            // Insert mock data if empty just to show
-            let novel = Novel(id: UUID().uuidString, title: "Sample Light Novel from Docs", author: "Author Name")
-            context.insert(novel)
-            
-            try context.save()
-            
+            error = nil
+            try await repository.fetchAndSaveDocument(id: SupportedGoogleDocument.documentID, context: context)
         } catch {
             self.error = error.localizedDescription
         }

@@ -4,8 +4,16 @@ public final class URLSessionNetworkService: NetworkService {
     private let session: URLSession
     private let interceptor: AuthInterceptor?
     
-    public init(session: URLSession = .shared, interceptor: AuthInterceptor? = nil) {
-        self.session = session
+    public init(session: URLSession? = nil, interceptor: AuthInterceptor? = nil) {
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.default
+            configuration.waitsForConnectivity = true
+            configuration.timeoutIntervalForRequest = 30
+            configuration.timeoutIntervalForResource = 120
+            self.session = URLSession(configuration: configuration)
+        }
         self.interceptor = interceptor
     }
     
@@ -21,7 +29,12 @@ public final class URLSessionNetworkService: NetworkService {
     }
     
     public func requestRaw(endpoint: Endpoint) async throws -> Data {
-        var urlRequest = URLRequest(url: endpoint.baseURL.appendingPathComponent(endpoint.path))
+        guard var components = URLComponents(url: endpoint.baseURL.appendingPathComponent(endpoint.path), resolvingAgainstBaseURL: false) else {
+            throw NetworkError.invalidURL
+        }
+        components.queryItems = endpoint.queryItems.isEmpty ? nil : endpoint.queryItems
+        guard let requestURL = components.url else { throw NetworkError.invalidURL }
+        var urlRequest = URLRequest(url: requestURL)
         urlRequest.httpMethod = endpoint.method.rawValue
         
         if let headers = endpoint.headers {
@@ -39,7 +52,13 @@ public final class URLSessionNetworkService: NetworkService {
             urlRequest = try await interceptor.adapt(urlRequest)
         }
         
-        let (data, response) = try await session.data(for: urlRequest)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: urlRequest)
+        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
+            throw NetworkError.noConnection
+        }
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.unknown(statusCode: 0)
@@ -63,6 +82,8 @@ public final class URLSessionNetworkService: NetworkService {
             throw NetworkError.forbidden
         case 404:
             throw NetworkError.notFound
+        case 400:
+            throw NetworkError.revisionConflict
         case 429:
             let retryAfter = Int(httpResponse.value(forHTTPHeaderField: "Retry-After") ?? "5") ?? 5
             throw NetworkError.tooManyRequests(retryAfter: retryAfter)

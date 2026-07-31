@@ -7,6 +7,7 @@ public struct ReaderView: View {
     
     @State private var showControls = false
     @State private var showTTS = false
+    @AppStorage("appTheme") private var appTheme = AppThemeType.system.rawValue
     
     public init(novel: Novel) {
         self.novel = novel
@@ -14,12 +15,16 @@ public struct ReaderView: View {
     
     public var body: some View {
         ZStack {
-            Color(UIColor.systemBackground).edgesIgnoringSafeArea(.all)
+            Color(uiColor: themeConfig.backgroundColor).edgesIgnoringSafeArea(.all)
             
             if viewModel.isLoading {
                 ProgressView("Loading Chapter...")
             } else {
-                TextKit2View(text: viewModel.currentChapterContent, highlightedRange: viewModel.highlightedRange)
+                TextKit2View(
+                    text: viewModel.currentChapterContent,
+                    highlightedRange: viewModel.highlightedRange,
+                    textColor: themeConfig.textColor
+                )
                     .onTapGesture {
                         withAnimation {
                             showControls.toggle()
@@ -48,9 +53,18 @@ public struct ReaderView: View {
                     Image(systemName: "headphones")
                 }
             }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: EditorView(novel: novel)) {
+                    Image(systemName: "pencil")
+                }
+                .accessibilityLabel("Mở trình chỉnh sửa")
+            }
         }
         .onAppear {
             viewModel.loadChapter(for: novel)
+        }
+        .onDisappear {
+            viewModel.stopTTS()
         }
         // MARK: - Handoff & Continuity Support
         .userActivity("com.lightnovelreader.reading", element: novel) { novel, activity in
@@ -65,5 +79,11 @@ public struct ReaderView: View {
             attributes.authorNames = [novel.author ?? "Unknown"]
             activity.contentAttributeSet = attributes
         }
+    }
+
+    private var themeConfig: ThemeConfig {
+        let engine = ThemeEngine()
+        engine.currentThemeType = AppThemeType(rawValue: appTheme) ?? .system
+        return engine.currentConfig
     }
 }

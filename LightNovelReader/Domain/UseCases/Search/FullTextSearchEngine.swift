@@ -19,6 +19,14 @@ public actor FullTextSearchEngine {
     public init() {}
     
     public func index(chapterId: String, content: String) {
+        // Re-indexing must replace old postings, otherwise every edit inflates
+        // scores and leaves matches for text that no longer exists.
+        for token in Array(invertedIndex.keys) {
+            invertedIndex[token]?.removeAll { $0.0 == chapterId }
+            if invertedIndex[token]?.isEmpty == true {
+                invertedIndex[token] = nil
+            }
+        }
         documentStore[chapterId] = content
         let tokens = tokenizer.tokenize(content)
         
@@ -40,7 +48,7 @@ public actor FullTextSearchEngine {
         let queryTokens = tokenizer.tokenize(query)
         guard !queryTokens.isEmpty else { return [] }
         
-        var results = [SearchResult]()
+        var groupedResults: [String: SearchResult] = [:]
         
         // Simple OR search for demonstration (Ranking by frequency)
         for token in queryTokens {
@@ -49,18 +57,21 @@ public actor FullTextSearchEngine {
                     let score = indices.count
                     guard let content = documentStore[chapterId] else { continue }
                     
-                    // Generate a snippet based on the first match
                     let snippet = generateSnippet(content: content, query: query)
-                    // Compute NSRange for highlight UI
-                    let nsRange = NSRange(location: 0, length: 0) // Computed in real implementation
-                    
-                    results.append(SearchResult(chapterId: chapterId, snippet: snippet, matchRange: nsRange, score: score))
+                    let matchRange = content.localizedStandardRange(of: query).map { NSRange($0, in: content) }
+                        ?? content.localizedStandardRange(of: token).map { NSRange($0, in: content) }
+                        ?? NSRange(location: 0, length: 0)
+                    let result = SearchResult(chapterId: chapterId, snippet: snippet, matchRange: matchRange, score: score)
+                    if let previous = groupedResults[chapterId], previous.score >= score {
+                        continue
+                    }
+                    groupedResults[chapterId] = result
                 }
             }
         }
         
         // Group by chapterId and sort by score
-        return results.sorted { $0.score > $1.score }
+        return groupedResults.values.sorted { $0.score > $1.score }
     }
     
     private func generateSnippet(content: String, query: String) -> String {

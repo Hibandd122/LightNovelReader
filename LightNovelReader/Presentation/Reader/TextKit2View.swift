@@ -5,21 +5,20 @@ import UIKit
 public struct TextKit2View: UIViewRepresentable {
     public var text: String
     public var highlightedRange: NSRange?
-    
-    public init(text: String, highlightedRange: NSRange? = nil) {
+    public var textColor: UIColor
+
+    public init(text: String, highlightedRange: NSRange? = nil, textColor: UIColor = .label) {
         self.text = text
         self.highlightedRange = highlightedRange
+        self.textColor = textColor
     }
     
     public func makeUIView(context: Context) -> UITextView {
-        let textView = UITextView()
+        let textView = UITextView(usingTextLayoutManager: true)
         textView.isEditable = false
         textView.isScrollEnabled = true
         textView.backgroundColor = .clear
         textView.font = UIFont.preferredFont(forTextStyle: .body)
-        
-        // Optimize for large text
-        textView.layoutManager.allowsNonContiguousLayout = true
         
         return textView
     }
@@ -33,16 +32,14 @@ public struct TextKit2View: UIViewRepresentable {
         // Apply highlight
         let attributedString = NSMutableAttributedString(string: text, attributes: [
             .font: UIFont.preferredFont(forTextStyle: .body),
-            .foregroundColor: UIColor.label
+            .foregroundColor: textColor
         ])
         
         if let range = highlightedRange {
             attributedString.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.3), range: range)
             
             // Auto scroll to highlight
-            DispatchQueue.main.async {
-                uiView.scrollRangeToVisible(range)
-            }
+            uiView.scrollRangeToVisible(range)
         }
         
         uiView.attributedText = attributedString

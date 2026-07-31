@@ -7,9 +7,16 @@ public protocol KeychainStorageProtocol {
     func delete(key: String) throws
 }
 
-public enum KeychainError: Error {
+public enum KeychainError: LocalizedError {
     case duplicateEntry
     case unknown(status: OSStatus)
+
+    public var errorDescription: String? {
+        switch self {
+        case .duplicateEntry: return "Keychain entry already exists."
+        case .unknown(let status): return "Keychain operation failed (\(status))."
+        }
+    }
 }
 
 public final class KeychainStorage: KeychainStorageProtocol {

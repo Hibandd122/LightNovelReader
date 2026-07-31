@@ -14,8 +14,7 @@ public struct GoogleDriveService: GoogleDriveServiceProtocol {
     public func listLightNovels() async throws -> GoogleDriveFileList {
         let folderId = "1g1ExSDNBmOo_UvW7yiktBkl265aHfJCs"
         let query = "'\(folderId)' in parents and mimeType='application/vnd.google-apps.document' and trashed=false"
-        let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let endpoint = GoogleDocsEndpoint.listFiles(query: encodedQuery)
+        let endpoint = GoogleDocsEndpoint.listFiles(query: query)
         return try await networkService.request(endpoint: endpoint)
     }
 }

@@ -26,20 +26,27 @@ public final class ReadingTracker: ObservableObject {
     
     private var sessionStartTime: Date?
     private var isListening: Bool = false
+    private var modelContext: ModelContext?
     
     public init() {}
     
     public func startSession(context: ModelContext) {
+        modelContext = context
         let today = Calendar.current.startOfDay(for: Date())
-        
-        // Fetch session for today or create new
-        // Normally done with FetchDescriptor in SwiftData
-        let newSession = ReadingSession(date: today)
-        context.insert(newSession)
-        
-        self.currentSession = newSession
+
+        let descriptor = FetchDescriptor<ReadingSession>(predicate: #Predicate { $0.date == today })
+        let session: ReadingSession
+        let existingSessions = (try? context.fetch(descriptor)) ?? []
+        if let existing = existingSessions.first {
+            session = existing
+        } else {
+            session = ReadingSession(date: today)
+            context.insert(session)
+        }
+
+        self.currentSession = session
         self.sessionStartTime = Date()
-        
+        try? context.save()
         calculateStreak(context: context)
     }
     
@@ -54,6 +61,11 @@ public final class ReadingTracker: ObservableObject {
         }
         
         self.sessionStartTime = nil
+        try? modelContext?.save()
+    }
+
+    public func setListening(_ listening: Bool) {
+        isListening = listening
     }
     
     public func addWordsRead(_ count: Int) {
@@ -61,9 +73,20 @@ public final class ReadingTracker: ObservableObject {
     }
     
     private func calculateStreak(context: ModelContext) {
-        // Fetch all ReadingSessions, sort by date descending.
-        // Count consecutive days where readingDuration + listeningDuration > 0
-        // Update self.currentStreak
-        self.currentStreak = 1 // Mock implementation
+        guard let sessions = try? context.fetch(FetchDescriptor<ReadingSession>(sortBy: [SortDescriptor(\ReadingSession.date, order: .reverse)])) else {
+            currentStreak = 0
+            return
+        }
+        let activeDays = Set(sessions.filter { $0.readingDuration + $0.listeningDuration > 0 }.map {
+            Calendar.current.startOfDay(for: $0.date)
+        })
+        var streak = 0
+        var day = Calendar.current.startOfDay(for: Date())
+        while activeDays.contains(day) {
+            streak += 1
+            guard let previousDay = Calendar.current.date(byAdding: .day, value: -1, to: day) else { break }
+            day = previousDay
+        }
+        currentStreak = streak
     }
 }

@@ -16,17 +16,24 @@ public enum HTTPMethod: String {
 public protocol Endpoint {
     var baseURL: URL { get }
     var path: String { get }
+    var queryItems: [URLQueryItem] { get }
     var method: HTTPMethod { get }
     var headers: [String: String]? { get }
     var body: Data? { get }
 }
 
+public extension Endpoint {
+    var queryItems: [URLQueryItem] { [] }
+}
+
 public enum NetworkError: LocalizedError {
+    case invalidToken
     case invalidURL
     case noConnection
     case unauthorized
     case forbidden
     case notFound
+    case revisionConflict
     case serverError
     case tooManyRequests(retryAfter: Int)
     case decodingError(Error)
@@ -34,6 +41,8 @@ public enum NetworkError: LocalizedError {
     
     public var errorDescription: String? {
         switch self {
+        case .invalidToken: return "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn."
+        case .revisionConflict: return "Tài liệu đã thay đổi trên Google Docs. Vui lòng đồng bộ lại trước khi lưu."
         case .noConnection: return "No internet connection."
         case .unauthorized: return "Session expired. Please log in again."
         case .serverError: return "Internal server error."

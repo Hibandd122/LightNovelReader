@@ -2,7 +2,7 @@ import Foundation
 
 public protocol GoogleDocsServiceProtocol {
     func getDocument(id: String) async throws -> GoogleDocsDocument
-    func batchUpdate(id: String, requests: [GoogleDocsRequest]) async throws -> GoogleDocsBatchUpdateResponse
+    func batchUpdate(id: String, requests: [GoogleDocsRequest], requiredRevisionId: String?) async throws -> GoogleDocsBatchUpdateResponse
 }
 
 public struct GoogleDocsService: GoogleDocsServiceProtocol {
@@ -17,19 +17,44 @@ public struct GoogleDocsService: GoogleDocsServiceProtocol {
         return try await networkService.request(endpoint: endpoint)
     }
     
-    public func batchUpdate(id: String, requests: [GoogleDocsRequest]) async throws -> GoogleDocsBatchUpdateResponse {
-        let payload = try JSONEncoder().encode(["requests": requests])
+    public func batchUpdate(id: String, requests: [GoogleDocsRequest], requiredRevisionId: String? = nil) async throws -> GoogleDocsBatchUpdateResponse {
+        let payload = try JSONEncoder().encode(GoogleDocsBatchUpdatePayload(requests: requests, writeControl: requiredRevisionId.map { GoogleDocsWriteControl(requiredRevisionId: $0) }))
         let endpoint = GoogleDocsEndpoint.batchUpdate(id: id, payload: payload)
         return try await networkService.request(endpoint: endpoint)
     }
+}
+
+private struct GoogleDocsBatchUpdatePayload: Encodable {
+    let requests: [GoogleDocsRequest]
+    let writeControl: GoogleDocsWriteControl?
+}
+
+private struct GoogleDocsWriteControl: Encodable {
+    let requiredRevisionId: String
 }
 
 // Minimal models for decoding
 public struct GoogleDocsDocument: Decodable {
     public let documentId: String
     public let title: String
-    public let body: GoogleDocsBody
-    public let revisionId: String
+    public let body: GoogleDocsBody?
+    public let revisionId: String?
+    public let tabs: [GoogleDocsTab]?
+}
+
+public struct GoogleDocsTab: Decodable {
+    public let tabProperties: GoogleDocsTabProperties
+    public let documentTab: GoogleDocsDocumentTab?
+}
+
+public struct GoogleDocsTabProperties: Decodable {
+    public let tabId: String
+    public let title: String
+    public let index: Int?
+}
+
+public struct GoogleDocsDocumentTab: Decodable {
+    public let body: GoogleDocsBody?
 }
 
 public struct GoogleDocsBody: Decodable {
@@ -38,11 +63,12 @@ public struct GoogleDocsBody: Decodable {
 
 public struct StructuralElement: Decodable {
     public let paragraph: Paragraph?
-    // other elements omitted for brevity
+    public let table: GoogleDocsTable?
 }
 
 public struct Paragraph: Decodable {
     public let elements: [ParagraphElement]
+    public let paragraphStyle: ParagraphStyle?
 }
 
 public struct ParagraphElement: Decodable {
@@ -51,7 +77,19 @@ public struct ParagraphElement: Decodable {
 
 public struct TextRun: Decodable {
     public let content: String
+    public let textStyle: TextStyle?
 }
+
+public struct ParagraphStyle: Decodable {
+    public let namedStyleType: String?
+}
+
+public struct TextStyle: Decodable {
+    public let bold: Bool?
+    public let italic: Bool?
+}
+
+public struct GoogleDocsTable: Decodable {}
 
 // Encodables for updates
 public struct GoogleDocsRequest: Encodable {
@@ -70,11 +108,24 @@ public struct DeleteContentRangeRequest: Encodable {
 
 public struct Location: Encodable {
     public let index: Int
+    public let tabId: String?
+
+    public init(index: Int, tabId: String? = nil) {
+        self.index = index
+        self.tabId = tabId
+    }
 }
 
 public struct RangeElement: Encodable {
     public let startIndex: Int
     public let endIndex: Int
+    public let tabId: String?
+
+    public init(startIndex: Int, endIndex: Int, tabId: String? = nil) {
+        self.startIndex = startIndex
+        self.endIndex = endIndex
+        self.tabId = tabId
+    }
 }
 
 public struct GoogleDocsBatchUpdateResponse: Decodable {

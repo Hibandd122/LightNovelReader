@@ -3,7 +3,7 @@ import XCTest
 
 final class SegmentTextForTTSUseCaseTests: XCTestCase {
     
-    var segmenter: TextSegmenter!
+    private var segmenter = TextSegmenter()
     
     override func setUp() {
         super.setUp()
@@ -11,7 +11,6 @@ final class SegmentTextForTTSUseCaseTests: XCTestCase {
     }
     
     override func tearDown() {
-        segmenter = nil
         super.tearDown()
     }
     
@@ -40,5 +39,17 @@ final class SegmentTextForTTSUseCaseTests: XCTestCase {
         
         XCTAssertEqual(sentences.count, 1)
         XCTAssertEqual(sentences[0], text)
+    }
+
+    func testSegmenter_WithVietnameseTextAndQuotes_ShouldKeepSentenceTogether() {
+        let text = "Cậu ấy nói: \"Xin chào, tôi là AI.\" Và rồi đi."
+        let sentences = segmenter.split(text)
+
+        XCTAssertEqual(sentences, ["Cậu ấy nói: \"Xin chào, tôi là AI.\"", "Và rồi đi."])
+    }
+
+    func testSegmenter_WithVietnameseParagraphs_ShouldSplitWithoutPunctuation() {
+        let text = "Đoạn đầu\n\nĐoạn sau"
+        XCTAssertEqual(segmenter.split(text), ["Đoạn đầu", "Đoạn sau"])
     }
 }

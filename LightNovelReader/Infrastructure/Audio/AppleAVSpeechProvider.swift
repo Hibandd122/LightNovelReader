@@ -1,60 +1,88 @@
 import Foundation
 import AVFoundation
 
+@MainActor
 public final class AppleAVSpeechProvider: NSObject, TTSProvider, AVSpeechSynthesizerDelegate {
-    public var providerName: String = "Apple AVSpeech"
+    public let providerName = "Apple AVSpeech"
     public var currentVoice: TTSVoice
-    public var speakingRate: Float = 0.5
-    
+    public var speakingRate: Float = AVSpeechUtteranceDefaultSpeechRate
+
     private let synthesizer = AVSpeechSynthesizer()
-    private var completionContinuation: CheckedContinuation<Void, Error>?
-    
+    private var continuation: CheckedContinuation<Void, Error>?
+
     public override init() {
-        self.currentVoice = TTSVoice(id: "com.apple.ttsvoice.siri.vi", name: "Siri", language: "vi-VN")
+        let vietnameseVoice = AVSpeechSynthesisVoice.speechVoices()
+            .first { $0.language.caseInsensitiveCompare("vi-VN") == .orderedSame }
+        currentVoice = TTSVoice(
+            id: vietnameseVoice?.identifier ?? "vi-VN",
+            name: vietnameseVoice?.name ?? "Tiếng Việt",
+            language: vietnameseVoice?.language ?? "vi-VN"
+        )
         super.init()
-        self.synthesizer.delegate = self
+        synthesizer.delegate = self
     }
-    
+
     public func synthesize(text: String) async throws -> URL {
-        // Apple's synthesizer plays text directly, but starting iOS 13 you can synthesize to file
-        // For simplicity, we just return a dummy URL since it can speak on the fly
-        return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dummy.caf")
+        throw TTSProviderError.unavailable(providerName)
     }
-    
+
     public func play(audioURL: URL) async throws {
-        // Since Apple TTS speaks from text, this method is slightly adapted
-        // A true implementation would pass the original text or parse the URL if it synthesized to file.
-        // We will mock the delay for architecture compliance.
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        throw TTSProviderError.unavailable(providerName)
     }
-    
+
     public func speak(text: String) async throws {
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: currentVoice.language)
-        utterance.rate = speakingRate
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            self.completionContinuation = continuation
-            synthesizer.speak(utterance)
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        stop()
+        let utterance = AVSpeechUtterance(string: trimmedText)
+        guard let voice = AVSpeechSynthesisVoice(identifier: currentVoice.id)
+                ?? AVSpeechSynthesisVoice(language: "vi-VN") else {
+            throw TTSProviderError.unavailable("Tiếng Việt (vi-VN)")
+        }
+        guard voice.language.caseInsensitiveCompare("vi-VN") == .orderedSame else {
+            throw TTSProviderError.unavailable("Tiếng Việt (vi-VN)")
+        }
+        utterance.voice = voice
+        utterance.rate = min(max(speakingRate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
+        utterance.preUtteranceDelay = 0.05
+        utterance.postUtteranceDelay = 0.05
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            self.continuation = continuation
+            self.synthesizer.speak(utterance)
         }
     }
-    
+
     public func pause() {
+        guard synthesizer.isSpeaking else { return }
         synthesizer.pauseSpeaking(at: .immediate)
     }
-    
+
     public func resume() {
+        guard synthesizer.isPaused else { return }
         synthesizer.continueSpeaking()
     }
-    
+
     public func stop() {
-        synthesizer.stopSpeaking(at: .immediate)
-        completionContinuation?.resume()
-        completionContinuation = nil
+        if synthesizer.isSpeaking || synthesizer.isPaused {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+        finish(with: CancellationError())
     }
-    
+
     public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        completionContinuation?.resume()
-        completionContinuation = nil
+        finish()
+    }
+
+    public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        finish(with: CancellationError())
+    }
+
+    private func finish(with error: Error? = nil) {
+        guard let continuation else { return }
+        self.continuation = nil
+        if let error { continuation.resume(throwing: error) }
+        else { continuation.resume(returning: ()) }
     }
 }

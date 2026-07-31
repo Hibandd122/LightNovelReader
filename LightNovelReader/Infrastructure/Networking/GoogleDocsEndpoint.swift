@@ -7,9 +7,9 @@ public enum GoogleDocsEndpoint: Endpoint {
     
     public var baseURL: URL {
         if case .listFiles = self {
-            return URL(string: "https://www.googleapis.com/drive/v3")!
+            return URL(string: "https://www.googleapis.com/drive/v3") ?? URL(fileURLWithPath: "/")
         }
-        return URL(string: "https://docs.googleapis.com/v1")!
+        return URL(string: "https://docs.googleapis.com/v1") ?? URL(fileURLWithPath: "/")
     }
     
     public var path: String {
@@ -24,6 +24,17 @@ public enum GoogleDocsEndpoint: Endpoint {
         switch self {
         case .getDocument, .listFiles: return .get
         case .batchUpdate: return .post
+        }
+    }
+
+    public var queryItems: [URLQueryItem] {
+        switch self {
+        case .getDocument:
+            return [URLQueryItem(name: "includeTabsContent", value: "true")]
+        case .listFiles(let query):
+            return [URLQueryItem(name: "q", value: query), URLQueryItem(name: "fields", value: "files(id,name,mimeType,modifiedTime)")]
+        case .batchUpdate:
+            return []
         }
     }
     
