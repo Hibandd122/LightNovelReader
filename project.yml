@@ -2,6 +2,10 @@ name: LightNovelReader
 options:
   bundleIdPrefix: com.lightnovelreader
   objectVersion: 54
+packages:
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 7.1.0
 targets:
   LightNovelReader:
     type: application
@@ -12,6 +16,8 @@ targets:
         excludes:
           - "Tests"
           - "LightNovelWidgets"
+    dependencies:
+      - package: GoogleSignIn
     info:
       path: LightNovelReader/Info.plist
       properties:

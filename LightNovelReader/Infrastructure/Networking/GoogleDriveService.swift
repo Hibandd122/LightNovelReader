@@ -12,9 +12,8 @@ public struct GoogleDriveService: GoogleDriveServiceProtocol {
     }
     
     public func listLightNovels() async throws -> GoogleDriveFileList {
-        // Only fetch Google Docs files
-        let query = "mimeType='application/vnd.google-apps.document' and trashed=false"
-        // Need to URL encode the query in real app
+        let folderId = "1g1ExSDNBmOo_UvW7yiktBkl265aHfJCs"
+        let query = "'\(folderId)' in parents and mimeType='application/vnd.google-apps.document' and trashed=false"
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         let endpoint = GoogleDocsEndpoint.listFiles(query: encodedQuery)
         return try await networkService.request(endpoint: endpoint)

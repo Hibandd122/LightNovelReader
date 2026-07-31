@@ -10,6 +10,7 @@ public final class DIContainer {
     public let tokenManager: TokenManager
     public let syncManager: SyncManager
     public let ttsManager: TTSManager
+    public let googleAuthManager: GoogleAuthManager
     
     private init() {
         self.tokenManager = TokenManager(keychain: KeychainStorage())
@@ -17,5 +18,6 @@ public final class DIContainer {
         self.networkService = URLSessionNetworkService(interceptor: interceptor)
         self.syncManager = SyncManager(networkService: networkService)
         self.ttsManager = TTSManager(provider: AppleAVSpeechProvider(), audioCache: AudioCacheManager())
+        self.googleAuthManager = GoogleAuthManager(tokenManager: self.tokenManager)
     }
 }

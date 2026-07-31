@@ -1,4 +1,6 @@
 import Foundation
+import GoogleSignIn
+import UIKit
 
 @MainActor
 public final class GoogleAuthManager: ObservableObject {
@@ -9,14 +11,26 @@ public final class GoogleAuthManager: ObservableObject {
     }
     
     public func signIn() async throws {
-        // This is where ASWebAuthenticationSession or GoogleSignIn SDK logic goes
-        // Since we are pure Swift without 3rd party UI libraries, we would use ASWebAuthenticationSession
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            throw NSError(domain: "AuthError", code: -1, userInfo: [NSLocalizedDescriptionKey: "No root view controller found"])
+        }
         
-        // Mock successful login
-        try await tokenManager.saveTokens(access: "mock_access_token", refresh: "mock_refresh_token")
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+        
+        let user = result.user
+        
+        guard let accessToken = user.accessToken.tokenString as String? else {
+            throw NSError(domain: "AuthError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing tokens"])
+        }
+        
+        let refreshToken = user.refreshToken.tokenString
+        
+        try await tokenManager.saveTokens(access: accessToken, refresh: refreshToken)
     }
     
     public func signOut() async {
+        GIDSignIn.sharedInstance.signOut()
         await tokenManager.clearTokens()
     }
 }

@@ -11,14 +11,26 @@ public struct SettingsView: View {
                 Section(header: Text("Account")) {
                     if appState.isAuthenticated {
                         Button("Sign Out") {
-                            // Call GoogleAuthManager.signOut
-                            appState.isAuthenticated = false
+                            Task {
+                                await DIContainer.shared.googleAuthManager.signOut()
+                                await MainActor.run {
+                                    appState.isAuthenticated = false
+                                }
+                            }
                         }
                         .foregroundColor(.red)
                     } else {
                         Button("Sign in with Google") {
-                            // Call GoogleAuthManager.signIn
-                            appState.isAuthenticated = true
+                            Task {
+                                do {
+                                    try await DIContainer.shared.googleAuthManager.signIn()
+                                    await MainActor.run {
+                                        appState.isAuthenticated = true
+                                    }
+                                } catch {
+                                    print("Login failed: \(error)")
+                                }
+                            }
                         }
                     }
                 }

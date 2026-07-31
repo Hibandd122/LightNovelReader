@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import GoogleSignIn
 
 @main
 struct LightNovelReaderApp: App {
@@ -29,6 +30,9 @@ struct LightNovelReaderApp: App {
                 .onAppear {
                     // Inject DI dependencies implicitly if needed, or pass them down
                     let _ = DIContainer.shared
+                }
+                .onOpenURL { url in
+                    GIDSignIn.sharedInstance.handle(url)
                 }
         }
         .modelContainer(sharedModelContainer)
