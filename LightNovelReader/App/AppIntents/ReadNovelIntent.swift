@@ -2,8 +2,8 @@ import AppIntents
 import SwiftUI
 
 public struct ReadNovelIntent: AppIntent {
-    public static var title: LocalizedStringResource = "Read Novel"
-    public static var description = IntentDescription("Continues reading your most recent light novel or a specific one.")
+    public nonisolated static let title: LocalizedStringResource = "Read Novel"
+    public nonisolated static let description = IntentDescription("Continues reading your most recent light novel or a specific one.")
     
     @Parameter(title: "Novel Title", description: "The title of the novel you want to read")
     public var novelTitle: String?

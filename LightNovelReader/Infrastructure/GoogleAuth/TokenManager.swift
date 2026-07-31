@@ -14,10 +14,6 @@ public actor TokenManager {
     
     public init(keychain: KeychainStorageProtocol) {
         self.keychain = keychain
-        loadTokensFromKeychain()
-    }
-    
-    private func loadTokensFromKeychain() {
         if let accessData = try? keychain.load(key: accessKey),
            let access = String(data: accessData, encoding: .utf8) {
             self.accessToken = access

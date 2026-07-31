@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import GoogleSignIn
+@preconcurrency import GoogleSignIn
 import UIKit
 
 @MainActor
@@ -50,7 +50,7 @@ public final class GoogleAuthManager: ObservableObject {
         }
         let accessToken = user.accessToken.tokenString
         let refreshToken = user.refreshToken.tokenString
-        let expiresIn = max(60, user.accessToken.expirationDate.timeIntervalSinceNow)
+        let expiresIn = max(60, (user.accessToken.expirationDate ?? Date()).timeIntervalSinceNow)
         try await tokenManager.saveTokens(access: accessToken, refresh: refreshToken, expiresIn: expiresIn)
     }
 }

@@ -1,6 +1,7 @@
 import UIKit
 import CoreText
 
+@MainActor
 public final class FontManager {
     public static let shared = FontManager()
     

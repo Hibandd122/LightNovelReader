@@ -1,6 +1,7 @@
 import UIKit
 import CoreText
 
+@MainActor
 public struct TypographySettings: Equatable {
     public var fontFamily: String
     public var fontSize: CGFloat
@@ -25,6 +26,7 @@ public struct TypographySettings: Equatable {
     )
 }
 
+@MainActor
 public struct TypographyEngine {
     public init() {}
     

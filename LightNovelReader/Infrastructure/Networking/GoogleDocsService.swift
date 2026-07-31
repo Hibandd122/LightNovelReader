@@ -34,7 +34,7 @@ private struct GoogleDocsWriteControl: Encodable {
 }
 
 // Minimal models for decoding
-public struct GoogleDocsDocument: Decodable {
+public struct GoogleDocsDocument: Decodable, Sendable {
     public let documentId: String
     public let title: String
     public let body: GoogleDocsBody?
@@ -42,71 +42,71 @@ public struct GoogleDocsDocument: Decodable {
     public let tabs: [GoogleDocsTab]?
 }
 
-public struct GoogleDocsTab: Decodable {
+public struct GoogleDocsTab: Decodable, Sendable {
     public let tabProperties: GoogleDocsTabProperties
     public let documentTab: GoogleDocsDocumentTab?
 }
 
-public struct GoogleDocsTabProperties: Decodable {
+public struct GoogleDocsTabProperties: Decodable, Sendable {
     public let tabId: String
     public let title: String
     public let index: Int?
 }
 
-public struct GoogleDocsDocumentTab: Decodable {
+public struct GoogleDocsDocumentTab: Decodable, Sendable {
     public let body: GoogleDocsBody?
 }
 
-public struct GoogleDocsBody: Decodable {
+public struct GoogleDocsBody: Decodable, Sendable {
     public let content: [StructuralElement]
 }
 
-public struct StructuralElement: Decodable {
+public struct StructuralElement: Decodable, Sendable {
     public let paragraph: Paragraph?
     public let table: GoogleDocsTable?
 }
 
-public struct Paragraph: Decodable {
+public struct Paragraph: Decodable, Sendable {
     public let elements: [ParagraphElement]
     public let paragraphStyle: ParagraphStyle?
 }
 
-public struct ParagraphElement: Decodable {
+public struct ParagraphElement: Decodable, Sendable {
     public let textRun: TextRun?
 }
 
-public struct TextRun: Decodable {
+public struct TextRun: Decodable, Sendable {
     public let content: String
     public let textStyle: TextStyle?
 }
 
-public struct ParagraphStyle: Decodable {
+public struct ParagraphStyle: Decodable, Sendable {
     public let namedStyleType: String?
 }
 
-public struct TextStyle: Decodable {
+public struct TextStyle: Decodable, Sendable {
     public let bold: Bool?
     public let italic: Bool?
 }
 
-public struct GoogleDocsTable: Decodable {}
+public struct GoogleDocsTable: Decodable, Sendable {}
 
 // Encodables for updates
-public struct GoogleDocsRequest: Encodable {
+public struct GoogleDocsRequest: Encodable, Sendable {
     public let insertText: InsertTextRequest?
     public let deleteContentRange: DeleteContentRangeRequest?
 }
 
-public struct InsertTextRequest: Encodable {
+public struct InsertTextRequest: Encodable, Sendable {
     public let text: String
     public let location: Location
 }
 
-public struct DeleteContentRangeRequest: Encodable {
+public struct DeleteContentRangeRequest: Encodable, Sendable {
     public let range: RangeElement
 }
 
-public struct Location: Encodable {
+public struct Location: Encodable, Sendable {
     public let index: Int
     public let tabId: String?
 
@@ -116,7 +116,7 @@ public struct Location: Encodable {
     }
 }
 
-public struct RangeElement: Encodable {
+public struct RangeElement: Encodable, Sendable {
     public let startIndex: Int
     public let endIndex: Int
     public let tabId: String?
@@ -128,6 +128,6 @@ public struct RangeElement: Encodable {
     }
 }
 
-public struct GoogleDocsBatchUpdateResponse: Decodable {
+public struct GoogleDocsBatchUpdateResponse: Decodable, Sendable {
     public let documentId: String
 }

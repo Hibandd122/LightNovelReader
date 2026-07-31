@@ -71,12 +71,12 @@ public final class AppleAVSpeechProvider: NSObject, TTSProvider, AVSpeechSynthes
         finish(with: CancellationError())
     }
 
-    public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        finish()
+    nonisolated public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in self?.finish() }
     }
 
-    public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        finish(with: CancellationError())
+    nonisolated public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in self?.finish(with: CancellationError()) }
     }
 
     private func finish(with error: Error? = nil) {

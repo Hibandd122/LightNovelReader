@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import UIKit
+import SwiftData
 
 @MainActor
 public final class EditorViewModel: ObservableObject {

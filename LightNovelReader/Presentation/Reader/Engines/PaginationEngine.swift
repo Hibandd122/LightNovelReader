@@ -6,6 +6,7 @@ public enum ReadingMode {
 }
 
 /// Handles switching between Scroll Mode and Page Mode.
+@MainActor
 public final class PaginationEngine {
     private weak var containerView: UIView?
     private let textView: UITextView
