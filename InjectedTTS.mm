@@ -27,15 +27,36 @@
 
 @implementation TTSOverlayWindow
 
+static TTSOverlayWindow *sharedOverlay = nil;
+
 + (void)load {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        [[NSNotificationCenter defaultCenter] addObserverForName:@"UISceneDidActivateNotification"
+                                                          object:nil
+                                                           queue:[NSOperationQueue mainQueue]
+                                                      usingBlock:^(NSNotification * _Nonnull note) {
+            if (!sharedOverlay) {
+                if (@available(iOS 13.0, *)) {
+                    UIWindowScene *scene = (UIWindowScene *)note.object;
+                    if ([scene isKindOfClass:[UIWindowScene class]]) {
+                        sharedOverlay = [[TTSOverlayWindow alloc] initWithFrame:CGRectMake(20, 80, 340, 260)];
+                        sharedOverlay.windowScene = scene;
+                        [sharedOverlay makeKeyAndVisible];
+                    }
+                }
+            }
+        }];
+        
+        // Fallback for non-scene apps
         [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidFinishLaunchingNotification
                                                           object:nil
                                                            queue:[NSOperationQueue mainQueue]
                                                       usingBlock:^(NSNotification * _Nonnull note) {
-            TTSOverlayWindow *overlay = [[TTSOverlayWindow alloc] initWithFrame:CGRectMake(20, 80, 340, 260)];
-            [overlay makeKeyAndVisible];
+            if (!sharedOverlay && ![[UIDevice currentDevice].systemVersion hasPrefix:@"13."] && ![[UIDevice currentDevice].systemVersion hasPrefix:@"14."] && ![[UIDevice currentDevice].systemVersion hasPrefix:@"15."] && ![[UIDevice currentDevice].systemVersion hasPrefix:@"16."] && ![[UIDevice currentDevice].systemVersion hasPrefix:@"17."]) {
+                sharedOverlay = [[TTSOverlayWindow alloc] initWithFrame:CGRectMake(20, 80, 340, 260)];
+                [sharedOverlay makeKeyAndVisible];
+            }
         }];
     });
 }
