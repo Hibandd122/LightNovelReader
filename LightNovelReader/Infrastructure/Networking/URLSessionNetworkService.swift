@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 public final class URLSessionNetworkService: NetworkService {
     private let session: URLSession
     private let interceptor: AuthInterceptor?

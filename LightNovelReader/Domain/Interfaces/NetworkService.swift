@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 public protocol NetworkService {
     func request<T: Decodable>(endpoint: Endpoint) async throws -> T
     func requestRaw(endpoint: Endpoint) async throws -> Data

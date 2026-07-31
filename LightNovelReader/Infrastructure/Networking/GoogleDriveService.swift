@@ -1,9 +1,11 @@
 import Foundation
 
+@MainActor
 public protocol GoogleDriveServiceProtocol {
     func listLightNovels() async throws -> GoogleDriveFileList
 }
 
+@MainActor
 public struct GoogleDriveService: GoogleDriveServiceProtocol {
     private let networkService: NetworkService
     
