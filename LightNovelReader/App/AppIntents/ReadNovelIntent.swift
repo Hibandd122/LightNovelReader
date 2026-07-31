@@ -13,7 +13,9 @@ public struct ReadNovelIntent: AppIntent {
     
     public func perform() async throws -> some IntentResult {
         UserDefaults.standard.set(novelTitle, forKey: "pendingReadNovelTitle")
-        let dialog = novelTitle.map { "Đang mở \($0)." } ?? "Đang mở truyện gần đây nhất."
-        return .result(dialog: dialog)
+        if let novelTitle {
+            return .result(dialog: "Đang mở \(novelTitle).")
+        }
+        return .result(dialog: "Đang mở truyện gần đây nhất.")
     }
 }
