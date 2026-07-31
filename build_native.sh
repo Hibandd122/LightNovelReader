@@ -22,6 +22,7 @@ xcodebuild archive \
   -project "LightNovelReader.xcodeproj" \
   -scheme "LightNovelReader" \
   -configuration Release \
+  -destination "generic/platform=iOS" \
   -archivePath "build/LightNovelReader.xcarchive" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
