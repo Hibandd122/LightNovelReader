@@ -1,10 +1,12 @@
 import Foundation
 
+@MainActor
 public protocol GoogleDocsServiceProtocol {
     func getDocument(id: String) async throws -> GoogleDocsDocument
     func batchUpdate(id: String, requests: [GoogleDocsRequest], requiredRevisionId: String?) async throws -> GoogleDocsBatchUpdateResponse
 }
 
+@MainActor
 public struct GoogleDocsService: GoogleDocsServiceProtocol {
     private let networkService: NetworkService
     

@@ -50,10 +50,6 @@ public final class TTSManager: ObservableObject {
         }
     }
 
-    deinit {
-        if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
-    }
-
     public func start(sentences: [String], startingIndex: Int = 0) {
         let validSentences = sentences.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard !validSentences.isEmpty, validSentences.indices.contains(startingIndex) else {

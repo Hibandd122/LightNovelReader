@@ -52,7 +52,7 @@ public actor AudioCacheManager {
     }
     
     /// Prefetches audio by running a background task and storing it in memory/disk.
-    public func prefetchAudio(key: String, downloadAction: @escaping () async throws -> URL) async {
+    public func prefetchAudio(key: String, downloadAction: @escaping @Sendable () async throws -> URL) async {
         guard getAudio(for: key) == nil else { return } // Already cached
         guard downloadTasks[key] == nil else { return } // Already fetching
         
