@@ -29,6 +29,7 @@ jobs:
             -framework AVFoundation \
             -framework WebKit \
             -framework CoreGraphics \
+            -framework UniformTypeIdentifiers \
             -lz \
             -lc++ \
             -o InjectedTTS.dylib \
