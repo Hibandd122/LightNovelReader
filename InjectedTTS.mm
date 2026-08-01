@@ -126,7 +126,7 @@ static NSData *ReadZipEntry(NSData *archive, NSString *targetName, NSError **err
             }
             if (!result) return nil;
             uLong actualCRC = crc32(0L, Z_NULL, 0);
-            actualCRC = crc32(actualCRC, result.bytes, (uInt)result.length);
+            actualCRC = crc32(actualCRC, (const Bytef *)result.bytes, (uInt)result.length);
             if ((uint32_t)actualCRC != expectedCRC) {
                 if (error) *error = [NSError errorWithDomain:@"InjectedTTS.DOCX" code:3 userInfo:@{
                     NSLocalizedDescriptionKey: @"DOCX checksum validation failed."
