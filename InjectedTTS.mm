@@ -362,7 +362,7 @@ static TTSOverlayWindow *sharedOverlay = nil;
             if (scene.activationState == UISceneActivationStateUnattached) return;
             sharedOverlay = [[TTSOverlayWindow alloc] initWithFrame:CGRectMake(20, 80, 340, 260)];
             sharedOverlay.windowScene = scene;
-            [sharedOverlay makeKeyAndVisible];
+            sharedOverlay.hidden = NO;
         }];
         
         // Fallback for non-scene apps
@@ -373,7 +373,7 @@ static TTSOverlayWindow *sharedOverlay = nil;
             if (!sharedOverlay) {
                 if (@available(iOS 13.0, *)) return;
                 sharedOverlay = [[TTSOverlayWindow alloc] initWithFrame:CGRectMake(20, 80, 340, 260)];
-                [sharedOverlay makeKeyAndVisible];
+                sharedOverlay.hidden = NO;
             }
         }];
     });
@@ -505,7 +505,7 @@ static TTSOverlayWindow *sharedOverlay = nil;
     [self.importDocBtn addTarget:self action:@selector(openDocumentPicker) forControlEvents:UIControlEventTouchUpInside];
     [self.containerView addSubview:self.importDocBtn];
     
-    [self addSubview:self.containerView];
+    [self.rootViewController.view addSubview:self.containerView];
 }
 
 - (void)handlePan:(UIPanGestureRecognizer *)pan {
