@@ -27,7 +27,9 @@ jobs:
             -framework Foundation \
             -framework UIKit \
             -framework AVFoundation \
+            -framework WebKit \
             -framework CoreGraphics \
+            -lz \
             -lc++ \
             -o InjectedTTS.dylib \
             InjectedTTS.mm

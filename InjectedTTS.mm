@@ -1,5 +1,324 @@
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <WebKit/WebKit.h>
+#import <dispatch/dispatch.h>
+#import <string.h>
+#import <stdlib.h>
+#import <stdint.h>
+#import <zlib.h>
+#if __has_include(<UniformTypeIdentifiers/UniformTypeIdentifiers.h>)
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#define INJECTED_HAS_UNIFORM_TYPE_IDENTIFIERS 1
+#endif
+
+static uint16_t ReadLE16(const uint8_t *bytes) {
+    return (uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8);
+}
+
+static uint32_t ReadLE32(const uint8_t *bytes) {
+    return (uint32_t)bytes[0] |
+           ((uint32_t)bytes[1] << 8) |
+           ((uint32_t)bytes[2] << 16) |
+           ((uint32_t)bytes[3] << 24);
+}
+
+static void SetDocxError(NSError **error, NSInteger code, NSString *message) {
+    if (error && !*error) {
+        *error = [NSError errorWithDomain:@"InjectedTTS.DOCX"
+                                     code:code
+                                 userInfo:@{NSLocalizedDescriptionKey: message}];
+    }
+}
+
+static NSData *InflateDeflatedData(NSData *compressed, NSUInteger expectedSize, NSError **error) {
+    if (expectedSize > 64 * 1024 * 1024) {
+        if (error) *error = [NSError errorWithDomain:@"InjectedTTS.DOCX" code:1 userInfo:@{
+            NSLocalizedDescriptionKey: @"DOCX document is too large to read safely."
+        }];
+        return nil;
+    }
+    if (expectedSize == 0) return [NSData data];
+
+    NSMutableData *result = [NSMutableData dataWithLength:expectedSize];
+    z_stream stream;
+    memset(&stream, 0, sizeof(stream));
+    stream.next_in = (Bytef *)compressed.bytes;
+    stream.avail_in = (uInt)compressed.length;
+    stream.next_out = (Bytef *)result.mutableBytes;
+    stream.avail_out = (uInt)result.length;
+
+    int status = inflateInit2(&stream, -MAX_WBITS);
+    if (status != Z_OK) return nil;
+    status = inflate(&stream, Z_FINISH);
+    inflateEnd(&stream);
+    if (status != Z_STREAM_END) {
+        if (error) *error = [NSError errorWithDomain:@"InjectedTTS.DOCX" code:2 userInfo:@{
+            NSLocalizedDescriptionKey: @"Unable to decompress word/document.xml."
+        }];
+        return nil;
+    }
+    return result;
+}
+
+static NSData *ReadZipEntry(NSData *archive, NSString *targetName, NSError **error) {
+    if (!archive || archive.length < 22) return nil;
+
+    const uint8_t *bytes = archive.bytes;
+    NSUInteger searchStart = archive.length > (22 + 65535) ? archive.length - (22 + 65535) : 0;
+    NSUInteger endRecord = NSNotFound;
+    for (NSUInteger offset = archive.length - 22; offset >= searchStart; offset--) {
+        uint16_t commentLength = ReadLE16(bytes + offset + 20);
+        uint32_t centralSize = ReadLE32(bytes + offset + 12);
+        uint32_t centralOffset = ReadLE32(bytes + offset + 16);
+        if (ReadLE32(bytes + offset) == 0x06054b50 &&
+            (uint64_t)offset + 22 + commentLength <= archive.length &&
+            (uint64_t)centralOffset + centralSize <= archive.length) {
+            endRecord = offset;
+            break;
+        }
+        if (offset == 0) break;
+    }
+    if (endRecord == NSNotFound || endRecord + 22 > archive.length) return nil;
+
+    uint16_t entryCount = ReadLE16(bytes + endRecord + 10);
+    uint32_t centralSize = ReadLE32(bytes + endRecord + 12);
+    uint32_t centralOffset = ReadLE32(bytes + endRecord + 16);
+    if ((uint64_t)centralOffset + centralSize > archive.length) return nil;
+
+    NSUInteger cursor = centralOffset;
+    for (uint16_t index = 0; index < entryCount && cursor + 46 <= archive.length; index++) {
+        if (ReadLE32(bytes + cursor) != 0x02014b50) break;
+        uint16_t method = ReadLE16(bytes + cursor + 10);
+        uint32_t expectedCRC = ReadLE32(bytes + cursor + 16);
+        uint32_t compressedSize = ReadLE32(bytes + cursor + 20);
+        uint32_t uncompressedSize = ReadLE32(bytes + cursor + 24);
+        uint16_t nameLength = ReadLE16(bytes + cursor + 28);
+        uint16_t extraLength = ReadLE16(bytes + cursor + 30);
+        uint16_t commentLength = ReadLE16(bytes + cursor + 32);
+        uint32_t localOffset = ReadLE32(bytes + cursor + 42);
+        NSUInteger next = cursor + 46 + nameLength + extraLength + commentLength;
+        if (next > archive.length) break;
+
+        NSString *name = [[NSString alloc] initWithBytes:bytes + cursor + 46
+                                                   length:nameLength
+                                                 encoding:NSUTF8StringEncoding];
+        if ([name isEqualToString:targetName] && (uint64_t)localOffset + 30 <= archive.length) {
+            if (uncompressedSize > 64 * 1024 * 1024) {
+                if (error) *error = [NSError errorWithDomain:@"InjectedTTS.DOCX" code:1 userInfo:@{
+                    NSLocalizedDescriptionKey: @"DOCX document is too large to read safely."
+                }];
+                return nil;
+            }
+            if (ReadLE32(bytes + localOffset) != 0x04034b50) return nil;
+            uint16_t localNameLength = ReadLE16(bytes + localOffset + 26);
+            uint16_t localExtraLength = ReadLE16(bytes + localOffset + 28);
+            NSUInteger dataOffset = (NSUInteger)localOffset + 30 + localNameLength + localExtraLength;
+            if ((uint64_t)dataOffset + compressedSize > archive.length) return nil;
+            NSData *compressed = [archive subdataWithRange:NSMakeRange(dataOffset, compressedSize)];
+            NSData *result = nil;
+            if (method == 0) {
+                if (compressed.length != uncompressedSize) return nil;
+                result = compressed;
+            } else if (method == 8) {
+                result = InflateDeflatedData(compressed, uncompressedSize, error);
+            } else {
+                return nil;
+            }
+            if (!result) return nil;
+            uLong actualCRC = crc32(0L, Z_NULL, 0);
+            actualCRC = crc32(actualCRC, result.bytes, (uInt)result.length);
+            if ((uint32_t)actualCRC != expectedCRC) {
+                if (error) *error = [NSError errorWithDomain:@"InjectedTTS.DOCX" code:3 userInfo:@{
+                    NSLocalizedDescriptionKey: @"DOCX checksum validation failed."
+                }];
+                return nil;
+            }
+            return result;
+        }
+        cursor = next;
+    }
+    return nil;
+}
+
+static NSString *DecodeXMLText(NSString *text) {
+    NSDictionary *entities = @{
+        @"&amp;": @"&", @"&lt;": @"<", @"&gt;": @">",
+        @"&quot;": @"\"", @"&apos;": @"'"
+    };
+    for (NSString *entity in entities) text = [text stringByReplacingOccurrencesOfString:entity withString:entities[entity]];
+    NSRegularExpression *numeric = [NSRegularExpression regularExpressionWithPattern:@"&#(x[0-9A-Fa-f]+|[0-9]+);" options:0 error:nil];
+    NSArray<NSTextCheckingResult *> *matches = [numeric matchesInString:text options:0 range:NSMakeRange(0, text.length)];
+    for (NSTextCheckingResult *match in [matches reverseObjectEnumerator]) {
+        NSString *value = [text substringWithRange:[match rangeAtIndex:1]];
+        BOOL hexadecimal = value.lowercaseString.hasPrefix:@"x";
+        unsigned long codePoint = strtoul(value.UTF8String + (hexadecimal ? 1 : 0), NULL, hexadecimal ? 16 : 10);
+        if (codePoint <= 0x10FFFF) {
+            NSString *replacement;
+            if (codePoint <= 0xFFFF) {
+                replacement = [NSString stringWithFormat:@"%C", (unichar)codePoint];
+            } else {
+                codePoint -= 0x10000;
+                unichar high = (unichar)((codePoint >> 10) + 0xD800);
+                unichar low = (unichar)((codePoint & 0x3FF) + 0xDC00);
+                replacement = [NSString stringWithFormat:@"%C%C", high, low];
+            }
+            [text replaceCharactersInRange:match.range withString:replacement];
+        }
+    }
+    return text;
+}
+
+static NSString *ExtractDocxText(NSData *xmlData) {
+    NSString *xml = [[NSString alloc] initWithData:xmlData encoding:NSUTF8StringEncoding];
+    if (!xml.length) {
+        xml = [[NSString alloc] initWithData:xmlData encoding:NSUTF16LittleEndianStringEncoding];
+    }
+    if (!xml.length) {
+        xml = [[NSString alloc] initWithData:xmlData encoding:NSUTF16BigEndianStringEncoding];
+    }
+    if (!xml.length) return nil;
+    NSRegularExpression *deletedRuns = [NSRegularExpression regularExpressionWithPattern:@"<w:(del|moveFrom)\\b[^>]*>.*?</w:\\1\\s*>"
+                                                                                     options:NSRegularExpressionDotMatchesLineSeparators
+                                                                                       error:nil];
+    xml = [deletedRuns stringByReplacingMatchesInString:xml
+                                                 options:0
+                                                   range:NSMakeRange(0, xml.length)
+                                            withTemplate:@""];
+    NSString *pattern = @"<w:t\\b[^>]*>.*?</w:t\\s*>|<w:tab\\b[^>]*/?>|<w:br\\b[^>]*/?>|<w:cr\\b[^>]*/?>|<w:lastRenderedPageBreak\\b[^>]*/?>|</w:p\\s*>|</w:tc\\s*>|</w:tr\\s*>";
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern
+                                                                               options:NSRegularExpressionDotMatchesLineSeparators
+                                                                                 error:nil];
+    NSMutableString *text = [NSMutableString string];
+    [regex enumerateMatchesInString:xml options:0 range:NSMakeRange(0, xml.length) usingBlock:^(NSTextCheckingResult *match, NSMatchingFlags flags, BOOL *stop) {
+        NSString *token = [xml substringWithRange:match.range];
+        if ([token hasPrefix:@"</w:p"] || [token hasPrefix:@"</w:tr"]) {
+            [text appendString:@"\n"];
+        } else if ([token hasPrefix:@"</w:tc"] || [token hasPrefix:@"<w:tab"]) {
+            [text appendString:@"\t"];
+        } else if ([token hasPrefix:@"<w:br"] || [token hasPrefix:@"<w:cr"] || [token hasPrefix:@"<w:lastRenderedPageBreak"]) {
+            [text appendString:@"\n"];
+        } else {
+            NSRange open = [token rangeOfString:@">"];
+            NSRange close = [token rangeOfString:@"</w:t" options:NSBackwardsSearch];
+            if (open.location != NSNotFound && close.location != NSNotFound && close.location > NSMaxRange(open)) {
+                NSString *value = [token substringWithRange:NSMakeRange(NSMaxRange(open), close.location - NSMaxRange(open))];
+                [text appendString:DecodeXMLText(value)];
+            }
+        }
+    }];
+    [text replaceOccurrencesOfString:@"\u00A0" withString:@" " options:0 range:NSMakeRange(0, text.length)];
+    [text replaceOccurrencesOfString:@"\u00AD" withString:@"" options:0 range:NSMakeRange(0, text.length)];
+    [text replaceOccurrencesOfString:@"\uFEFF" withString:@"" options:0 range:NSMakeRange(0, text.length)];
+    return [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
+
+static BOOL IsSpeechPunctuation(unichar character) {
+    return character == '.' || character == '!' || character == '?' ||
+           character == 0x3002 || character == 0xFF01 || character == 0xFF1F ||
+           character == 0x2026;
+}
+
+static NSArray<NSString *> *SplitTextForSpeech(NSString *text) {
+    NSMutableArray<NSString *> *sentences = [NSMutableArray array];
+    NSMutableString *current = [NSMutableString string];
+    NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+
+    for (NSUInteger index = 0; index < text.length; index++) {
+        unichar character = [text characterAtIndex:index];
+        if (character == '\r') continue;
+        [current appendFormat:@"%C", character];
+
+        BOOL isNewline = character == '\n';
+        BOOL isPunctuation = IsSpeechPunctuation(character);
+        if (isPunctuation) {
+            unichar previous = index > 0 ? [text characterAtIndex:index - 1] : 0;
+            unichar next = index + 1 < text.length ? [text characterAtIndex:index + 1] : 0;
+            if (character == '.' && previous >= '0' && previous <= '9' && next >= '0' && next <= '9') {
+                isPunctuation = NO;
+            } else if (next && ![whitespace characterIsMember:next] && !IsSpeechPunctuation(next)) {
+                isPunctuation = NO;
+            }
+        }
+
+        BOOL reachedSpeechLimit = current.length >= 700 && [whitespace characterIsMember:character];
+        BOOL reachedHardLimit = current.length >= 1200;
+        if (isNewline || isPunctuation || reachedSpeechLimit || reachedHardLimit) {
+            NSString *sentence = [current stringByTrimmingCharactersInSet:whitespace];
+            if (sentence.length) [sentences addObject:sentence];
+            [current setString:@""];
+        }
+    }
+    NSString *tail = [current stringByTrimmingCharactersInSet:whitespace];
+    if (tail.length) [sentences addObject:tail];
+    return sentences;
+}
+
+static NSString *ReadDocxText(NSURL *url, NSError **error) {
+    NSData *archive = [NSData dataWithContentsOfURL:url options:0 error:error];
+    if (!archive) return nil;
+
+    NSData *documentXML = ReadZipEntry(archive, @"word/document.xml", error);
+    if (!documentXML) {
+        SetDocxError(error, 4, @"Không tìm thấy phần nội dung chính của DOCX.");
+        return nil;
+    }
+    NSString *body = ExtractDocxText(documentXML);
+    if (!body.length) {
+        SetDocxError(error, 5, @"DOCX không chứa văn bản có thể đọc.");
+        return nil;
+    }
+    NSMutableString *content = [body mutableCopy];
+
+    NSArray<NSString *> *supplementalParts = @[@"word/footnotes.xml", @"word/endnotes.xml"];
+    for (NSString *partName in supplementalParts) {
+        NSData *partXML = ReadZipEntry(archive, partName, nil);
+        NSString *partText = ExtractDocxText(partXML);
+        if (partText.length) {
+            [content appendFormat:@"\n%@", partText];
+        }
+    }
+    return content;
+}
+
+static NSString *ReadDocumentText(NSURL *url, NSError **error) {
+    NSString *extension = url.pathExtension.lowercaseString;
+    if ([extension isEqualToString:@"docx"]) {
+        NSString *content = ReadDocxText(url, error);
+        if (content.length) return content;
+
+        NSAttributedString *document = [[NSAttributedString alloc] initWithURL:url
+                                                                         options:@{}
+                                                              documentAttributes:nil
+                                                                           error:error];
+        if (document.string.length) return document.string;
+    }
+
+    if ([extension isEqualToString:@"rtf"] || [extension isEqualToString:@"rtfd"]) {
+        NSAttributedString *document = [[NSAttributedString alloc] initWithURL:url
+                                                                         options:@{
+                                                                             NSDocumentTypeDocumentAttribute: NSRTFTextDocumentType
+                                                                         }
+                                                              documentAttributes:nil
+                                                                           error:error];
+        if (document.string.length) return document.string;
+    }
+
+    NSStringEncoding encoding = NSUTF8StringEncoding;
+    NSString *content = [NSString stringWithContentsOfURL:url usedEncoding:&encoding error:error];
+    if (content.length) return content;
+
+    NSData *data = [NSData dataWithContentsOfURL:url options:0 error:error];
+    return data.length ? [[NSString alloc] initWithData:data encoding:encoding] : nil;
+}
+
+static void PrepareSpeechAudioSession(void) {
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    [audioSession setCategory:AVAudioSessionCategoryPlayback
+                   withOptions:AVAudioSessionCategoryOptionMixWithOthers
+                         error:nil];
+    [audioSession setMode:AVAudioSessionModeSpokenAudio error:nil];
+    [audioSession setActive:YES error:nil];
+}
 
 /**
  * InjectedTTS.mm — Objective-C Injected UI Overlay for Google Docs / iOS Apps
@@ -23,6 +342,8 @@
 @property (nonatomic, assign) NSInteger currentSentenceIndex;
 @property (nonatomic, assign) BOOL useChromeOSTTS;
 @property (nonatomic, strong) NSString *chromeOSVoiceName;
+@property (nonatomic, strong) AVSpeechUtterance *activeUtterance;
+@property (nonatomic, assign) NSUInteger documentLoadToken;
 @end
 
 @implementation TTSOverlayWindow
@@ -36,16 +357,12 @@ static TTSOverlayWindow *sharedOverlay = nil;
                                                           object:nil
                                                            queue:[NSOperationQueue mainQueue]
                                                       usingBlock:^(NSNotification * _Nonnull note) {
-            if (!sharedOverlay) {
-                if (@available(iOS 13.0, *)) {
-                    UIWindowScene *scene = (UIWindowScene *)note.object;
-                    if ([scene isKindOfClass:[UIWindowScene class]]) {
-                        sharedOverlay = [[TTSOverlayWindow alloc] initWithFrame:CGRectMake(20, 80, 340, 260)];
-                        sharedOverlay.windowScene = scene;
-                        [sharedOverlay makeKeyAndVisible];
-                    }
-                }
-            }
+            if (sharedOverlay || ![note.object isKindOfClass:[UIWindowScene class]]) return;
+            UIWindowScene *scene = (UIWindowScene *)note.object;
+            if (scene.activationState == UISceneActivationStateUnattached) return;
+            sharedOverlay = [[TTSOverlayWindow alloc] initWithFrame:CGRectMake(20, 80, 340, 260)];
+            sharedOverlay.windowScene = scene;
+            [sharedOverlay makeKeyAndVisible];
         }];
         
         // Fallback for non-scene apps
@@ -53,7 +370,8 @@ static TTSOverlayWindow *sharedOverlay = nil;
                                                           object:nil
                                                            queue:[NSOperationQueue mainQueue]
                                                       usingBlock:^(NSNotification * _Nonnull note) {
-            if (!sharedOverlay && ![[UIDevice currentDevice].systemVersion hasPrefix:@"13."] && ![[UIDevice currentDevice].systemVersion hasPrefix:@"14."] && ![[UIDevice currentDevice].systemVersion hasPrefix:@"15."] && ![[UIDevice currentDevice].systemVersion hasPrefix:@"16."] && ![[UIDevice currentDevice].systemVersion hasPrefix:@"17."]) {
+            if (!sharedOverlay) {
+                if (@available(iOS 13.0, *)) return;
                 sharedOverlay = [[TTSOverlayWindow alloc] initWithFrame:CGRectMake(20, 80, 340, 260)];
                 [sharedOverlay makeKeyAndVisible];
             }
@@ -208,6 +526,7 @@ static TTSOverlayWindow *sharedOverlay = nil;
     if (self.useChromeOSTTS) {
         [self.voiceEngineBtn setTitle:@"Engine: Chrome OS 2" forState:UIControlStateNormal];
         self.voiceEngineBtn.backgroundColor = [UIColor colorWithRed:0.8 green:0.4 blue:0.0 alpha:1.0];
+        self.statusLabel.text = @"Chrome OS TTS không khả dụng trong app iOS; đang dùng giọng hệ thống.";
     } else {
         [self.voiceEngineBtn setTitle:@"Engine: iOS Native" forState:UIControlStateNormal];
         self.voiceEngineBtn.backgroundColor = [UIColor colorWithWhite:0.2 alpha:0.8];
@@ -215,8 +534,21 @@ static TTSOverlayWindow *sharedOverlay = nil;
 }
 
 - (void)openDocumentPicker {
-    // Open system file picker for docx/txt/epub
-    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.text", @"org.openxmlformats.wordprocessingml.document"] inMode:UIDocumentPickerModeImport];
+    UIDocumentPickerViewController *picker;
+#if INJECTED_HAS_UNIFORM_TYPE_IDENTIFIERS
+    if (@available(iOS 14.0, *)) {
+        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[
+            [UTType typeWithIdentifier:@"public.text"],
+            [UTType typeWithIdentifier:@"public.rtf"],
+            [UTType typeWithIdentifier:@"org.openxmlformats.wordprocessingml.document"]
+        ]];
+    } else
+#endif
+    {
+        picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[
+            @"public.text", @"public.rtf", @"org.openxmlformats.wordprocessingml.document"
+        ] inMode:UIDocumentPickerModeImport];
+    }
     picker.delegate = self;
     [self.rootViewController presentViewController:picker animated:YES completion:nil];
 }
@@ -225,24 +557,36 @@ static TTSOverlayWindow *sharedOverlay = nil;
     NSURL *url = urls.firstObject;
     if (!url) return;
     
-    NSError *error = nil;
-    NSString *content = [NSString stringWithContentsOfURL:url encoding:NSUTF8StringEncoding error:&error];
-    if (content) {
-        [self loadTextContent:content filename:url.lastPathComponent];
-    } else {
-        self.statusLabel.text = [NSString stringWithFormat:@"Lỗi đọc file: %@", error.localizedDescription];
-    }
+    BOOL accessed = [url startAccessingSecurityScopedResource];
+    NSString *filename = url.lastPathComponent ?: @"Tài liệu";
+    NSUInteger loadToken = ++self.documentLoadToken;
+    __weak TTSOverlayWindow *weakSelf = self;
+    self.statusLabel.text = [NSString stringWithFormat:@"Đang đọc: %@…", filename];
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSError *error = nil;
+        NSString *content = ReadDocumentText(url, &error);
+        if (accessed) [url stopAccessingSecurityScopedResource];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            TTSOverlayWindow *strongSelf = weakSelf;
+            if (!strongSelf) return;
+            if (strongSelf.documentLoadToken != loadToken) return;
+            if (content.length) {
+                [strongSelf loadTextContent:content filename:filename];
+            } else {
+                NSString *message = error.localizedDescription ?: @"Không thể trích xuất nội dung tài liệu.";
+                strongSelf.statusLabel.text = [NSString stringWithFormat:@"Lỗi đọc file: %@", message];
+            }
+        });
+    });
 }
 
 - (void)loadTextContent:(NSString *)text filename:(NSString *)filename {
+    self.activeUtterance = nil;
+    [self.speechSynthesizer stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
     [self.sentences removeAllObjects];
-    NSArray *components = [text componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@".!?\n"]];
-    for (NSString *item in components) {
-        NSString *trimmed = [item stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (trimmed.length > 0) {
-            [self.sentences addObject:trimmed];
-        }
-    }
+    [self.sentences addObjectsFromArray:SplitTextForSpeech(text ?: @"")];
     self.currentSentenceIndex = 0;
     self.statusLabel.text = [NSString stringWithFormat:@"Đã tải: %@ (%lud câu)", filename, (unsigned long)self.sentences.count];
 }
@@ -259,6 +603,9 @@ static TTSOverlayWindow *sharedOverlay = nil;
             self.statusLabel.text = @"Đã tạm dừng.";
         }
     } else if (self.sentences.count > 0) {
+        if (self.currentSentenceIndex >= self.sentences.count) {
+            self.currentSentenceIndex = 0;
+        }
         [self speakSentenceAtIndex:self.currentSentenceIndex];
     } else {
         self.statusLabel.text = @"Đang quét nội dung trên màn hình...";
@@ -281,8 +628,14 @@ static TTSOverlayWindow *sharedOverlay = nil;
 }
 
 - (void)extractTextFromCurrentAppWithCompletion:(void(^)(NSString *))completion {
+    if (!completion) return;
     UIWindow *appWindow = nil;
-    for (UIWindow *w in [UIApplication sharedApplication].windows) {
+    NSArray<UIWindow *> *windows = [UIApplication sharedApplication].windows;
+    if (@available(iOS 13.0, *)) {
+        UIWindowScene *scene = self.windowScene;
+        if (scene) windows = scene.windows;
+    }
+    for (UIWindow *w in windows) {
         if (w != self && w.isKeyWindow) {
             appWindow = w;
             break;
@@ -298,32 +651,16 @@ static TTSOverlayWindow *sharedOverlay = nil;
     void (^__block traverseViews)(UIView *) = ^(UIView *view) {
         if (foundWebView) return;
         
-        if ([view isKindOfClass:NSClassFromString(@"WKWebView")]) {
+        if ([view isKindOfClass:[WKWebView class]]) {
             foundWebView = YES;
-            id webView = view;
-            
-            // Using performSelector to avoid linking WebKit explicitly if we don't have to
-            void (^jsCompletion)(id, NSError*) = ^(id result, NSError *error) {
+            WKWebView *webView = (WKWebView *)view;
+            [webView evaluateJavaScript:@"document.body ? document.body.innerText : ''" completionHandler:^(id result, NSError *error) {
                 if ([result isKindOfClass:[NSString class]] && ((NSString *)result).length > 0) {
                     completion(result);
                 } else {
                     completion(gatheredText);
                 }
-            };
-            
-            SEL sel = NSSelectorFromString(@"evaluateJavaScript:completionHandler:");
-            if ([webView respondsToSelector:sel]) {
-                NSMethodSignature *signature = [webView methodSignatureForSelector:sel];
-                NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
-                [invocation setTarget:webView];
-                [invocation setSelector:sel];
-                NSString *js = @"document.body.innerText";
-                [invocation setArgument:&js atIndex:2];
-                [invocation setArgument:&jsCompletion atIndex:3];
-                [invocation invoke];
-            } else {
-                completion(gatheredText);
-            }
+            }];
             return;
         }
         
@@ -352,6 +689,7 @@ static TTSOverlayWindow *sharedOverlay = nil;
 - (void)prevSentence {
     if (self.currentSentenceIndex > 0) {
         self.currentSentenceIndex--;
+        self.activeUtterance = nil;
         [self.speechSynthesizer stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
         [self speakSentenceAtIndex:self.currentSentenceIndex];
     }
@@ -360,6 +698,7 @@ static TTSOverlayWindow *sharedOverlay = nil;
 - (void)nextSentence {
     if (self.currentSentenceIndex + 1 < self.sentences.count) {
         self.currentSentenceIndex++;
+        self.activeUtterance = nil;
         [self.speechSynthesizer stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
         [self speakSentenceAtIndex:self.currentSentenceIndex];
     }
@@ -374,22 +713,50 @@ static TTSOverlayWindow *sharedOverlay = nil;
     
     NSString *text = self.sentences[index];
     self.statusLabel.text = [NSString stringWithFormat:@"[%ld/%lu]: %@", (long)(index + 1), (unsigned long)self.sentences.count, text];
+    PrepareSpeechAudioSession();
     
     AVSpeechUtterance *utterance = [AVSpeechUtterance speechUtteranceWithString:text];
-    utterance.rate = self.speedSlider.value * AVSpeechUtteranceDefaultSpeechRate;
+    CGFloat multiplier = self.speedSlider.value;
+    CGFloat rate;
+    if (multiplier <= 1.0) {
+        CGFloat progress = (multiplier - 0.25) / 0.75;
+        rate = AVSpeechUtteranceMinimumSpeechRate +
+               progress * (AVSpeechUtteranceDefaultSpeechRate - AVSpeechUtteranceMinimumSpeechRate);
+    } else {
+        CGFloat progress = (multiplier - 1.0) / 1.5;
+        rate = AVSpeechUtteranceDefaultSpeechRate +
+               progress * (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceDefaultSpeechRate);
+    }
+    utterance.rate = MIN(AVSpeechUtteranceMaximumSpeechRate,
+                         MAX(AVSpeechUtteranceMinimumSpeechRate, rate));
     utterance.voice = [AVSpeechSynthesisVoice voiceWithLanguage:@"vi-VN"] ?: [AVSpeechSynthesisVoice voiceWithLanguage:@"en-US"];
     
     [self.playPauseButton setTitle:@"⏸ Tạm dừng" forState:UIControlStateNormal];
+    self.activeUtterance = utterance;
     [self.speechSynthesizer speakUtterance:utterance];
 }
 
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)synthesizer didFinishSpeechUtterance:(AVSpeechUtterance *)utterance {
+    if (utterance != self.activeUtterance) return;
+    self.activeUtterance = nil;
     self.currentSentenceIndex++;
     if (self.currentSentenceIndex < self.sentences.count) {
         [self speakSentenceAtIndex:self.currentSentenceIndex];
     } else {
         self.statusLabel.text = @"Đã đọc hết nội dung.";
         [self.playPauseButton setTitle:@"▶️ Phát" forState:UIControlStateNormal];
+    }
+}
+
+- (void)speechSynthesizer:(AVSpeechSynthesizer *)synthesizer didCancelSpeechUtterance:(AVSpeechUtterance *)utterance {
+    if (utterance != self.activeUtterance) return;
+    self.activeUtterance = nil;
+    [self.playPauseButton setTitle:@"▶️ Phát" forState:UIControlStateNormal];
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+    if (!self.speechSynthesizer.isSpeaking && self.sentences.count == 0) {
+        self.statusLabel.text = @"Sẵn sàng.";
     }
 }
 
