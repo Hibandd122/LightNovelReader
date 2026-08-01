@@ -83,6 +83,15 @@ static TTSOverlayWindow *sharedOverlay = nil;
     return self;
 }
 
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hitView = [super hitTest:point withEvent:event];
+    // If the touch hits the window itself or its root view (background), pass it through
+    if (hitView == self || hitView == self.rootViewController.view) {
+        return nil;
+    }
+    return hitView;
+}
+
 - (void)buildUI {
     self.containerView = [[UIView alloc] initWithFrame:self.bounds];
     self.containerView.backgroundColor = [UIColor colorWithRed:0.08 green:0.09 blue:0.12 alpha:0.92];
@@ -252,14 +261,91 @@ static TTSOverlayWindow *sharedOverlay = nil;
     } else if (self.sentences.count > 0) {
         [self speakSentenceAtIndex:self.currentSentenceIndex];
     } else {
-        // Fallback: Read Clipboard
-        NSString *clip = [UIPasteboard generalPasteboard].string;
-        if (clip && clip.length > 0) {
-            [self loadTextContent:clip filename:@"Clipboard"];
-            [self speakSentenceAtIndex:0];
-        } else {
-            self.statusLabel.text = @"Không có dữ liệu. Vui lòng dán/nhập file docx/txt.";
+        self.statusLabel.text = @"Đang quét nội dung trên màn hình...";
+        [self extractTextFromCurrentAppWithCompletion:^(NSString *text) {
+            if (text && text.length > 0) {
+                [self loadTextContent:text filename:@"Màn hình hiện tại"];
+                [self speakSentenceAtIndex:0];
+            } else {
+                // Fallback: Read Clipboard
+                NSString *clip = [UIPasteboard generalPasteboard].string;
+                if (clip && clip.length > 0) {
+                    [self loadTextContent:clip filename:@"Clipboard"];
+                    [self speakSentenceAtIndex:0];
+                } else {
+                    self.statusLabel.text = @"Không tìm thấy chữ trên màn hình.";
+                }
+            }
+        }];
+    }
+}
+
+- (void)extractTextFromCurrentAppWithCompletion:(void(^)(NSString *))completion {
+    UIWindow *appWindow = nil;
+    for (UIWindow *w in [UIApplication sharedApplication].windows) {
+        if (w != self && w.isKeyWindow) {
+            appWindow = w;
+            break;
         }
+    }
+    if (!appWindow) {
+        appWindow = [UIApplication sharedApplication].windows.firstObject;
+    }
+    
+    __block NSMutableString *gatheredText = [NSMutableString string];
+    __block BOOL foundWebView = NO;
+    
+    void (^__block traverseViews)(UIView *) = ^(UIView *view) {
+        if (foundWebView) return;
+        
+        if ([view isKindOfClass:NSClassFromString(@"WKWebView")]) {
+            foundWebView = YES;
+            id webView = view;
+            
+            // Using performSelector to avoid linking WebKit explicitly if we don't have to
+            void (^jsCompletion)(id, NSError*) = ^(id result, NSError *error) {
+                if ([result isKindOfClass:[NSString class]] && ((NSString *)result).length > 0) {
+                    completion(result);
+                } else {
+                    completion(gatheredText);
+                }
+            };
+            
+            SEL sel = NSSelectorFromString(@"evaluateJavaScript:completionHandler:");
+            if ([webView respondsToSelector:sel]) {
+                NSMethodSignature *signature = [webView methodSignatureForSelector:sel];
+                NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+                [invocation setTarget:webView];
+                [invocation setSelector:sel];
+                NSString *js = @"document.body.innerText";
+                [invocation setArgument:&js atIndex:2];
+                [invocation setArgument:&jsCompletion atIndex:3];
+                [invocation invoke];
+            } else {
+                completion(gatheredText);
+            }
+            return;
+        }
+        
+        if ([view isKindOfClass:[UILabel class]]) {
+            UILabel *lbl = (UILabel *)view;
+            if (lbl.text) [gatheredText appendFormat:@"%@\n", lbl.text];
+        } else if ([view isKindOfClass:[UITextView class]]) {
+            UITextView *tv = (UITextView *)view;
+            if (tv.text) [gatheredText appendFormat:@"%@\n", tv.text];
+        }
+        
+        for (UIView *subview in view.subviews) {
+            traverseViews(subview);
+        }
+    };
+    
+    if (appWindow) {
+        traverseViews(appWindow);
+    }
+    
+    if (!foundWebView) {
+        completion(gatheredText);
     }
 }
 
