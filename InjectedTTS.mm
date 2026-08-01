@@ -63,7 +63,7 @@ static NSData *InflateDeflatedData(NSData *compressed, NSUInteger expectedSize, 
 static NSData *ReadZipEntry(NSData *archive, NSString *targetName, NSError **error) {
     if (!archive || archive.length < 22) return nil;
 
-    const uint8_t *bytes = archive.bytes;
+    const uint8_t *bytes = (const uint8_t *)archive.bytes;
     NSUInteger searchStart = archive.length > (22 + 65535) ? archive.length - (22 + 65535) : 0;
     NSUInteger endRecord = NSNotFound;
     for (NSUInteger offset = archive.length - 22; offset >= searchStart; offset--) {
