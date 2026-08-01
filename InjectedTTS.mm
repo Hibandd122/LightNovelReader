@@ -145,12 +145,13 @@ static NSString *DecodeXMLText(NSString *text) {
         @"&amp;": @"&", @"&lt;": @"<", @"&gt;": @">",
         @"&quot;": @"\"", @"&apos;": @"'"
     };
-    for (NSString *entity in entities) text = [text stringByReplacingOccurrencesOfString:entity withString:entities[entity]];
+    NSMutableString *mutText = [text mutableCopy];
+    for (NSString *entity in entities) [mutText replaceOccurrencesOfString:entity withString:entities[entity] options:0 range:NSMakeRange(0, mutText.length)];
     NSRegularExpression *numeric = [NSRegularExpression regularExpressionWithPattern:@"&#(x[0-9A-Fa-f]+|[0-9]+);" options:0 error:nil];
-    NSArray<NSTextCheckingResult *> *matches = [numeric matchesInString:text options:0 range:NSMakeRange(0, text.length)];
+    NSArray<NSTextCheckingResult *> *matches = [numeric matchesInString:mutText options:0 range:NSMakeRange(0, mutText.length)];
     for (NSTextCheckingResult *match in [matches reverseObjectEnumerator]) {
-        NSString *value = [text substringWithRange:[match rangeAtIndex:1]];
-        BOOL hexadecimal = value.lowercaseString.hasPrefix:@"x";
+        NSString *value = [mutText substringWithRange:[match rangeAtIndex:1]];
+        BOOL hexadecimal = [value.lowercaseString hasPrefix:@"x"];
         unsigned long codePoint = strtoul(value.UTF8String + (hexadecimal ? 1 : 0), NULL, hexadecimal ? 16 : 10);
         if (codePoint <= 0x10FFFF) {
             NSString *replacement;
@@ -162,10 +163,10 @@ static NSString *DecodeXMLText(NSString *text) {
                 unichar low = (unichar)((codePoint & 0x3FF) + 0xDC00);
                 replacement = [NSString stringWithFormat:@"%C%C", high, low];
             }
-            [text replaceCharactersInRange:match.range withString:replacement];
+            [mutText replaceCharactersInRange:match.range withString:replacement];
         }
     }
-    return text;
+    return mutText;
 }
 
 static NSString *ExtractDocxText(NSData *xmlData) {
