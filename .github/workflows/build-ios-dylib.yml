@@ -20,6 +20,8 @@ jobs:
       - name: Install Theos
         run: |
           git clone --depth 1 https://github.com/theos/theos.git "$HOME/theos"
+          "$HOME/theos/bin/update-theos" || git -C "$HOME/theos" submodule update --init --recursive
+          ls "$HOME/theos/vendor/include" >/dev/null 2>&1
           echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
           echo "$HOME/theos/bin" >> "$GITHUB_PATH"
 
