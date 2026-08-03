@@ -82,7 +82,7 @@
         [alert addAction:[UIAlertAction actionWithTitle:@"Save" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { self.settings.voiceIdentifier = alert.textFields.firstObject.text ?: @""; [self.store saveSettings:self.settings]; [tableView reloadData]; }]];
         [self presentViewController:alert animated:YES completion:nil];
     } else if (indexPath.section == 2 && indexPath.row < 3) {
-        self.settings.highlightMode = indexPath.row + 1;
+        self.settings.highlightMode = (GDTHighlightMode)(indexPath.row + 1);
         [self.store saveSettings:self.settings];
         [tableView reloadSections:[NSIndexSet indexSetWithIndex:2] withRowAnimation:UITableViewRowAnimationNone];
     } else if (indexPath.section == 2 && indexPath.row == 3) {
