@@ -1,8 +1,0 @@
-build:
-  name: Custom Pure Native Swift Build
-  steps:
-    - eas/checkout
-    - run:
-        name: Build Native iOS App
-        command: bash build_native.sh
-    - eas/find_and_upload_build_artifacts

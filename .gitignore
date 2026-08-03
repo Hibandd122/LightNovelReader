@@ -9,3 +9,14 @@ cert.mobileprovision
 password.txt
 build/
 *.xcodeproj
+
+# iOS / injection workspace
+*.ipa
+extracted_ipa/
+extracted_artifact/
+GoogleDocsTTS.dylib
+
+# secrets
+.gh_token
+token.txt
+.env

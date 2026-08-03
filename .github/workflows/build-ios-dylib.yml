@@ -1,4 +1,4 @@
-name: Build iOS Dylib
+name: Build GoogleDocsTTS Dylib
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
       - master
     paths:
-      - 'InjectedTTS.mm'
+      - 'GoogleDocsTTS/**'
       - '.github/workflows/build-ios-dylib.yml'
   workflow_dispatch:
 
@@ -17,26 +17,39 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build InjectedTTS.dylib
+      - name: Install Theos
         run: |
-          clang -x objective-c++ -arch arm64 \
-            -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
-            -miphoneos-version-min=12.0 \
-            -dynamiclib \
-            -fobjc-arc \
-            -framework Foundation \
-            -framework UIKit \
-            -framework AVFoundation \
-            -framework WebKit \
-            -framework CoreGraphics \
-            -framework UniformTypeIdentifiers \
-            -lz \
-            -lc++ \
-            -o InjectedTTS.dylib \
-            InjectedTTS.mm
+          git clone --depth 1 https://github.com/theos/theos.git "$HOME/theos"
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+          echo "$HOME/theos/bin" >> "$GITHUB_PATH"
+
+      - name: Install iOS SDKs
+        run: |
+          git clone --depth 1 https://github.com/theos/sdks.git /tmp/sdks
+          mkdir -p "$HOME/theos/sdks"
+          cp -R /tmp/sdks/iPhoneOS*.sdk "$HOME/theos/sdks/" || true
+          ls "$HOME/theos/sdks"
+
+      - name: Build GoogleDocsTTS.dylib
+        working-directory: GoogleDocsTTS
+        run: make FINALPACKAGE=1
+
+      - name: List build output
+        run: |
+          ls -la GoogleDocsTTS/.theos/obj/Release/ || true
+          find GoogleDocsTTS/.theos -name "*.dylib" -print
+
+      - name: Combine architectures
+        run: |
+          DYLIB_DIR="GoogleDocsTTS/.theos/obj/Release"
+          lipo -create \
+            "$DYLIB_DIR/arm64/GoogleDocsTTS.dylib" \
+            "$DYLIB_DIR/arm64e/GoogleDocsTTS.dylib" \
+            -output GoogleDocsTTS.dylib
+          file GoogleDocsTTS.dylib
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InjectedTTS-Dylib
-          path: InjectedTTS.dylib
+          name: GoogleDocsTTS-Dylib
+          path: GoogleDocsTTS.dylib
