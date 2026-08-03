@@ -5,10 +5,10 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @protocol GDTHighlightEngine <NSObject>
-- (void)highlightSentence:(GDTSentence *)sentence inWebView:(WKWebView *)webView autoScroll:(BOOL)autoScroll completion:(void (^)(NSError * _Nullable error))completion;
-- (void)highlightParagraph:(GDTParagraph *)paragraph inWebView:(WKWebView *)webView autoScroll:(BOOL)autoScroll completion:(void (^)(NSError * _Nullable error))completion;
-- (void)highlightWord:(GDTWord *)word inWebView:(WKWebView *)webView autoScroll:(BOOL)autoScroll completion:(void (^)(NSError * _Nullable error))completion;
-- (void)clearHighlightInWebView:(WKWebView *)webView;
+- (void)highlightSentence:(GDTSentence * _Nullable)sentence inWebView:(WKWebView * _Nullable)webView autoScroll:(BOOL)autoScroll completion:(void (^ _Nullable)(NSError * _Nullable error))completion;
+- (void)highlightParagraph:(GDTParagraph * _Nullable)paragraph inWebView:(WKWebView * _Nullable)webView autoScroll:(BOOL)autoScroll completion:(void (^ _Nullable)(NSError * _Nullable error))completion;
+- (void)highlightWord:(GDTWord * _Nullable)word inWebView:(WKWebView * _Nullable)webView autoScroll:(BOOL)autoScroll completion:(void (^ _Nullable)(NSError * _Nullable error))completion;
+- (void)clearHighlightInWebView:(WKWebView * _Nullable)webView;
 @end
 
 @interface GDTDOMHighlightEngine : NSObject <GDTHighlightEngine>
