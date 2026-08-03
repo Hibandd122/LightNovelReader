@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME := GoogleDocsTTS
 GoogleDocsTTS_FILES := Tweak.xm Sources/GDTModels.mm Sources/GDTParser.mm Sources/GDTEngine.mm Sources/GDTStores.mm Sources/GDTControllers.mm Sources/GDTHighlight.mm Sources/GDTPlayback.mm Sources/GDTQueue.mm Sources/GDTSettingsPanel.mm Sources/GDTMiniPlayer.mm
-GoogleDocsTTS_CFLAGS := -std=c++17 -fobjc-arc -I$(THEOS_PROJECT_DIR)/Headers
+GoogleDocsTTS_CFLAGS := -std=gnu++17 -fobjc-arc -I$(THEOS_PROJECT_DIR)/Headers
 GoogleDocsTTS_FRAMEWORKS := UIKit WebKit AVFoundation MediaPlayer
 GoogleDocsTTS_LIBRARIES := sqlite3
 GoogleDocsTTS_PRIVATE_FRAMEWORKS :=
