@@ -41,20 +41,11 @@ jobs:
 
       - name: List build output
         run: |
-          ls -la GoogleDocsTTS/.theos/obj/Release/ || true
-          find GoogleDocsTTS/.theos -name "*.dylib" -print
-
-      - name: Combine architectures
-        run: |
-          DYLIB_DIR="GoogleDocsTTS/.theos/obj/Release"
-          lipo -create \
-            "$DYLIB_DIR/arm64/GoogleDocsTTS.dylib" \
-            "$DYLIB_DIR/arm64e/GoogleDocsTTS.dylib" \
-            -output GoogleDocsTTS.dylib
-          file GoogleDocsTTS.dylib
+          ls -la GoogleDocsTTS/.theos/obj/
+          file GoogleDocsTTS/.theos/obj/GoogleDocsTTS.dylib
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: GoogleDocsTTS-Dylib
-          path: GoogleDocsTTS.dylib
+          path: GoogleDocsTTS/.theos/obj/GoogleDocsTTS.dylib
