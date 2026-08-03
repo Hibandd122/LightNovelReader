@@ -32,6 +32,9 @@ jobs:
           cp -R /tmp/sdks/iPhoneOS*.sdk "$HOME/theos/sdks/" || true
           ls "$HOME/theos/sdks"
 
+      - name: Install ldid
+        run: brew install ldid || true
+
       - name: Build GoogleDocsTTS.dylib
         working-directory: GoogleDocsTTS
         run: make FINALPACKAGE=1
